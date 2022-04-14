@@ -3,9 +3,8 @@
 
 Usage: record-remote-and-pull-video.py
 
-Be sure to set phone to allow for ADB communication over USB, and set up options for
-OpenCamera to get full screen.  See the video recording notes in ardour directory for
-details.
+Be sure to set phone to allow for ADB communication over USB.  See the video
+recording notes in ardour directory for details.
 
 """
 
@@ -19,15 +18,25 @@ details.
 #
 # https://linuxhint.com/xdotool_stimulate_mouse_clicks_and_keystrokes/
 
+# NOTE: Look at the info from an OpenCamera video saved on the phone to find this path.
 OPENCAMERA_SAVE_DIR = "/storage/emulated/0/DCIM/OpenCamera/" # Where OpenCamera writes video.
 
 #RECORDING_METHOD = "screen" # Record with screenrecord; limited to screen resolution(?) and 3min, no sound.
 # https://stackoverflow.com/questions/21938948/how-to-increase-time-limit-of-adb-screen-record-of-android-kitkat
 RECORDING_METHOD = "button" # Record by emulating a button push and looking for new video file.
 
-VIDEO_PLAYER_CMD = "pl"
-VIDEO_PLAYER_CMD_JACK = "pl --jack"
-DETECT_JACK_PROCESS_NAMES = ["qjackctl"] # Search `ps -ef` for these names to detect Jack running.
+#VIDEO_PLAYER_CMD = "pl"
+VIDEO_PLAYER_CMD = "mplayer -loop 0"
+#VIDEO_PLAYER_CMD_JACK = "pl --jack"
+VIDEO_PLAYER_CMD_JACK = "mplayer -ao jack -loop 0"
+DETECT_JACK_PROCESS_NAMES = ["qjackctl"] # Search `ps -ef` for these to detect Jack running.
+
+PREVIEW_VIDEO = True
+QUERY_PREVIEW_VIDEO = False
+
+AUDIO_EXTRACT = True # Whether to ever extract a AUDIO file from the video.
+QUERY_AUDIO_EXTRACT = False # Ask before extracting AUDIO file.
+EXTRACTED_AUDIO_EXTENSION = ".wav"
 
 import sys
 import os
@@ -204,14 +213,29 @@ def pull_and_delete_file(pathname):
     adb(f"adb -d shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:{pathname}")
     return os.path.basename(pathname)
 
-def run_preview(video_path, jack=False):
-    """Run a preview of the movie, to check how it came out."""
-    if not jack:
-        cmd = f"{VIDEO_PLAYER_CMD} {video_path}"
+def preview_video(video_path):
+    """Run a preview of the video at `video_path`."""
+    if not (PREVIEW_VIDEO or QUERY_PREVIEW_VIDEO):
+        return
+
+    def run_preview(video_path):
+        """Run a preview of the video."""
+        if detect_if_jack_running():
+            print("\nDetected jack running via qjackctl.")
+            cmd = f"{VIDEO_PLAYER_CMD} {video_path}"
+        else:
+            print("\nDid not detect jack running via qjackctl.")
+            cmd = f"{VIDEO_PLAYER_CMD_JACK} {video_path}"
+        print(f"\nRunning: {cmd}")
+        os.system(cmd)
+
+    if QUERY_PREVIEW_VIDEO:
+        preview = input("\nRun preview? ")
+        if preview.strip() in {"Y", "y", "yes", "YES", "Yes"}:
+            run_preview(video_path)
     else:
-        cmd = f"{VIDEO_PLAYER_CMD_JACK} {video_path}"
-    print(f"\nRunning: {cmd}")
-    os.system(cmd)
+        print("\nRunning preview...")
+        run_preview(video_path)
 
 def detect_if_jack_running():
     """Determine if the Jack audio system is currently running."""
@@ -225,17 +249,57 @@ def detect_if_jack_running():
                 return True
     return False
 
-def extract_audio_from_video(video_path, extension=".wav"):
+def extract_audio_from_video(video_path):
     """Extract the audio from a video file, of the type with the given extension."""
-    dirname, basename = os.path.split(video_path)
-    root_name, video_extension = os.path.splitext(basename)
-    output_audio_path = os.path.join(dirname, root_name + extension)
-    print("\nExtracting audio to file: '{output_audio_path}'")
-    # https://superuser.com/questions/609740/extracting-wav-from-mp4-while-preserving-the-highest-possible-quality
-    cmd = f"ffmpeg -i {video_path} -map 0:a {output_audio_path}"
-    print("  ", cmd)
-    os.system(cmd)
-    return output_audio_path
+    # Note screen recording doesn't have audio, only the "button" method.
+    if not ((AUDIO_EXTRACT or QUERY_AUDIO_EXTRACT) and os.path.isfile(video_path)
+                                               and RECORDING_METHOD == "button"):
+        return
+
+    def run_audio_extraction(video_path, extension=".wav"):
+        dirname, basename = os.path.split(video_path)
+        root_name, video_extension = os.path.splitext(basename)
+        output_audio_path = os.path.join(dirname, root_name + extension)
+        print("\nExtracting audio to file: '{output_audio_path}'")
+        # https://superuser.com/questions/609740/extracting-wav-from-mp4-while-preserving-the-highest-possible-quality
+        cmd = f"ffmpeg -i {video_path} -map 0:a {output_audio_path}"
+        print("  ", cmd)
+        os.system(cmd)
+        return output_audio_path
+
+    if QUERY_AUDIO_EXTRACT:
+        extract_audio = input("\nExtract audio from video? ")
+        if extract_audio.strip() in {"Y", "y", "yes", "YES", "Yes"}:
+            print(f"\nExtracting audio from the video file:\n   {video_path}")
+            run_audio_extraction(video_path, extension=EXTRACTED_AUDIO_EXTENSION)
+            print("\nAudio extracted.")
+    else:
+        print(f"\nExtracting audio file with extension '{EXTRACTED_AUDIO_EXTENSION}' from video...")
+        run_audio_extraction(video_path, extension=EXTRACTED_AUDIO_EXTENSION)
+        print("\nAudio extracted.")
+
+def print_info_about_pulled_video(video_path):
+    """Print out some information about the resolution, etc., of a video."""
+    print("\nRunning ffprobe on saved video file:") # TODO, refine info and maybe print better.
+    os.system(f"ffprobe -v error -show_entries stream=width,height -of default=noprint_wrappers=1 {video_path}")
+
+def record_and_pull_video():
+    """Record a video on the Android device and pull the resulting file."""
+    if RECORDING_METHOD == "screen":
+        recorder_pid, video_path = start_screenrecording(args)
+        start_screen_monitor(block=True)
+        kill_pid(recorder_pid)
+        video_path = pull_and_delete_file(video_path) # TODO: does this work with preview??? Haven't tested...
+
+    elif RECORDING_METHOD == "button":
+        video_path, video_basename = start_button_push_recording()
+        pulled_video_path = pull_and_delete_file(video_path) # Note file always written to CWD for now.
+        sleep(0.3)
+        video_path = args.file_basename_or_prefix[0] + "_" + pulled_video_path
+        print(f"\nSaving (renaming) video file as\n   {video_path}")
+        os.rename(pulled_video_path, video_path)
+
+    return video_path
 
 def parse_command_line():
     """Create and return the argparse object to read the command line."""
@@ -301,49 +365,18 @@ def parse_command_line():
 
 def main():
     """Main script functionality."""
-
-    args = parse_command_line()
-
     print_startup_message()
     wakeup_device()
     unlock_screen()
     open_video_camera()
 
-    if RECORDING_METHOD == "screen":
-        recorder_pid, video_path = start_screenrecording(args)
-        start_screen_monitor(block=True)
-        kill_pid(recorder_pid)
-        video_path = pull_and_delete_file(video_path) # TODO: does this work with preview??? Haven't tested...
-
-    elif RECORDING_METHOD == "button":
-        video_path, video_basename = start_button_push_recording()
-        pulled_video_path = pull_and_delete_file(video_path) # Note file always written to CWD for now.
-        sleep(0.3)
-        new_video_path = args.file_basename_or_prefix[0] + "_" + pulled_video_path
-        os.rename(pulled_video_path, new_video_path)
-        print(f"\nSaving (renaming) video file as\n   {new_video_path}")
-        video_path = new_video_path # For possible preview below.
-
-    print("\nRunning ffprobe on saved video file:") # TODO, refine info and maybe print better.
-    os.system(f"ffprobe -v error -show_entries stream=width,height -of default=noprint_wrappers=1 {video_path}")
-
-    preview = input("\nRun preview? ")
-    if preview.strip() in {"Y", "y", "yes", "YES", "Yes"}:
-        if detect_if_jack_running():
-            print("\nDetected jack running via qjackctl.")
-            run_preview(video_path, jack=True)
-        else:
-            print("\nDid not detect jack running via qjackctl.")
-            run_preview(video_path)
-
-    if os.path.isfile(video_path) and RECORDING_METHOD == "button": # Screen recording doesn't have audio, only button.
-        extract_audio = input("\nExtract audio from video? ")
-        if extract_audio.strip() in {"Y", "y", "yes", "YES", "Yes"}:
-            print(f"\nExtracting audio from the video file:\n   {video_path}")
-            extract_audio_from_video(video_path, extension=".wav")
-            print("\nAudio extracted.")
+    video_path = record_and_pull_video()
+    print_info_about_pulled_video(video_path)
+    preview_video(video_path)
+    extract_audio_from_video(video_path)
 
 if __name__ == "__main__":
 
+    args = parse_command_line() # Put `args` in global scope so all funs can use it.
     main()
 
