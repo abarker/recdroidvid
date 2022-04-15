@@ -26,9 +26,9 @@ OPENCAMERA_SAVE_DIR = "/storage/emulated/0/DCIM/OpenCamera/" # Where OpenCamera 
 RECORDING_METHOD = "button" # Record by emulating a button push and looking for new video file.
 
 #VIDEO_PLAYER_CMD = "pl"
-VIDEO_PLAYER_CMD = "mplayer -loop 0"
+VIDEO_PLAYER_CMD = "mplayer -loop 0 -really-quiet -title '====== VIDEO PREVIEW ======'"
 #VIDEO_PLAYER_CMD_JACK = "pl --jack"
-VIDEO_PLAYER_CMD_JACK = "mplayer -ao jack -loop 0"
+VIDEO_PLAYER_CMD_JACK = "mplayer -ao jack -loop 0 -really-quiet -title '====== VIDEO PREVIEW ======'"
 DETECT_JACK_PROCESS_NAMES = ["qjackctl"] # Search `ps -ef` for these to detect Jack running.
 
 PREVIEW_VIDEO = True
@@ -43,6 +43,9 @@ import os
 from time import sleep
 import subprocess
 import argparse
+
+YES_ANSWERS = {"Y", "y", "yes", "YES", "Yes"}
+NO_ANSWERS = {"N", "n", "no", "NO", "No"}
 
 def adb(cmd, print_cmd=True, return_output=False):
     """Run the ADB command, printing out diagnostics.  Setting `return_output`
@@ -222,23 +225,23 @@ def preview_video(video_path):
         """Run a preview of the video."""
         if detect_if_jack_running():
             print("\nDetected jack running via qjackctl.")
-            cmd = f"{VIDEO_PLAYER_CMD} {video_path}"
+            cmd = f"{VIDEO_PLAYER_CMD_JACK} {video_path}"
         else:
             print("\nDid not detect jack running via qjackctl.")
-            cmd = f"{VIDEO_PLAYER_CMD_JACK} {video_path}"
+            cmd = f"{VIDEO_PLAYER_CMD} {video_path}"
         print(f"\nRunning: {cmd}")
         os.system(cmd)
 
     if QUERY_PREVIEW_VIDEO:
         preview = input("\nRun preview? ")
-        if preview.strip() in {"Y", "y", "yes", "YES", "Yes"}:
+        if preview.strip() in YES_ANSWERS:
             run_preview(video_path)
     else:
         print("\nRunning preview...")
         run_preview(video_path)
 
 def detect_if_jack_running():
-    """Determine if the Jack audio system is currently running."""
+    """Determine if the Jack audio system is currently running; return true if it is."""
     ps_output = subprocess.check_output(["ps", "-ef"])
     ps_output = ps_output.decode("utf-8")
     ps_output = ps_output.splitlines()
@@ -260,23 +263,19 @@ def extract_audio_from_video(video_path):
         dirname, basename = os.path.split(video_path)
         root_name, video_extension = os.path.splitext(basename)
         output_audio_path = os.path.join(dirname, root_name + extension)
-        print("\nExtracting audio to file: '{output_audio_path}'")
+        print(f"\nExtracting audio to file: '{output_audio_path}'")
         # https://superuser.com/questions/609740/extracting-wav-from-mp4-while-preserving-the-highest-possible-quality
-        cmd = f"ffmpeg -i {video_path} -map 0:a {output_audio_path}"
+        cmd = f"ffmpeg -i {video_path} -map 0:a {output_audio_path} -loglevel quiet"
         print("  ", cmd)
         os.system(cmd)
-        return output_audio_path
+        print("\nAudio extracted.")
 
     if QUERY_AUDIO_EXTRACT:
         extract_audio = input("\nExtract audio from video? ")
-        if extract_audio.strip() in {"Y", "y", "yes", "YES", "Yes"}:
-            print(f"\nExtracting audio from the video file:\n   {video_path}")
+        if extract_audio.strip() in YES_ANSWERS:
             run_audio_extraction(video_path, extension=EXTRACTED_AUDIO_EXTENSION)
-            print("\nAudio extracted.")
     else:
-        print(f"\nExtracting audio file with extension '{EXTRACTED_AUDIO_EXTENSION}' from video...")
         run_audio_extraction(video_path, extension=EXTRACTED_AUDIO_EXTENSION)
-        print("\nAudio extracted.")
 
 def print_info_about_pulled_video(video_path):
     """Print out some information about the resolution, etc., of a video."""
