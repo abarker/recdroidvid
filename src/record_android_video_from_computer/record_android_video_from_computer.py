@@ -6,7 +6,35 @@ Usage: record-remote-and-pull-video.py
 Be sure to set phone to allow for ADB communication over USB.  See the video
 recording notes in ardour directory for details.
 
+Note: Phone cannot be powered down.
+
 """
+
+# Maybe look here for better way (INTENT) to start video recording
+# https://developer.android.com/guide/components/intents-common
+# ACTION_VIDEO_CAPTURE
+# TODO: Consider using AutoInput to push the start button after below command... (someone online suggested)
+#    adb shell am start -a android.media.action.VIDEO_CAPTURE & # FAILS for now???
+
+# TODO: AFTER below mod, add an option to use a naming convention on ALL the
+# videos, so they begin with a number that sorts correctly, something like a1_
+# a2_ prefixes, time-sorted.  They may time-sort OK anyway because of time
+# component.
+
+# TODO: How about, to implement below, you just keep looking in the directory
+# if you find any FINISHED files, no longer growing, you pull them off in bg?
+# Does add some CPU you don't want or need.  Alternate: Get ALL new ones when
+# monitor program shuts down!? Then user can decide, i.e., if memory is low or
+# not.  User can then press the record button and change anything else from
+# the computer screen!!!  Easy mod, too.
+#
+# NOTE: Will need to check if camera is still recording after shutdown, and only
+# then issue the stop button push.  See if file growing, maybe.  They may or may
+# not turn off the video recording feature, so toggle can get messed up.
+# ---> If nothing else, toggle power off then wakeup and open camera again to stop record.
+#      Note you still need to get the video off the phone.
+# ---> NOOOOO, above works!!! ADB still works as long as device not totally powered down!
+#      And now turning device off at end, anyway!!
 
 # TODO: Keep monitor open, but detect when phone stops recording or starts.  Simultaneously,
 # start or stop the recording on Ardour.  Can probably use space bar with xdotool, but need
@@ -20,6 +48,7 @@ recording notes in ardour directory for details.
 
 # NOTE: Look at the info from an OpenCamera video saved on the phone to find this path.
 OPENCAMERA_SAVE_DIR = "/storage/emulated/0/DCIM/OpenCamera/" # Where OpenCamera writes video.
+OPENCAMERA_PACKAGE_NAME = "net.sourceforge.opencamera"
 
 #RECORDING_METHOD = "screen" # Record with screenrecord; limited to screen resolution(?) and 3min, no sound.
 # https://stackoverflow.com/questions/21938948/how-to-increase-time-limit-of-adb-screen-record-of-android-kitkat
@@ -50,7 +79,7 @@ NO_ANSWERS = {"N", "n", "no", "NO", "No"}
 def adb(cmd, print_cmd=True, return_output=False):
     """Run the ADB command, printing out diagnostics.  Setting `return_output`
     returns the stdout of the command, but the command must be redirectable to
-    a temp file.  Returned string is a direct read, with no splitting or processing."""
+    a temp file.  Returned string is a direct read, with no splitting."""
     if print_cmd:
         print(f"\nCMD: {cmd}")
 
@@ -62,25 +91,30 @@ def adb(cmd, print_cmd=True, return_output=False):
     os.system(cmd + f" > {tmp_adb_cmd_output_file}")
     with open(tmp_adb_cmd_output_file, "r") as f:
         cmd_output = f.read()
-        os.remove(tmp_adb_cmd_output_file)
-
-        return cmd_output
+    os.remove(tmp_adb_cmd_output_file)
+    return cmd_output
 
 def adb_ls(path, extension_whitelist=None):
-    """Run the ADB ls command and return the filenames."""
-    # TODO: could use the new adb option to return output...
+    """Run the ADB ls command and return the filenames time-sorted from oldest
+    to newest.   The `extension_whitelist` is an optional iterable of required
+    file extensions such as `[".mp4"]`."""
     tmp_ls_path = "zzzz_tmp_adb_ls_path"
-    adb(f"adb ls {path} > {tmp_ls_path}")
-
-    with open(tmp_ls_path, "r") as f:
-        ls_output = f.read()
-    os.remove(tmp_ls_path)
-
+    ls_output = adb(f"adb ls -ctr {path} > {tmp_ls_path}", return_output=True)
     ls_list = ls_output.splitlines()
+
     if extension_whitelist:
         for e in extension_whitelist:
             ls_output = [f for f in ls_output if f.endswith(e)]
     return ls_list
+
+def adb_get_dir_disk_usage(dirname, extension=".mp4"):
+    """Return the total disk usage in the directory passed in, limiting to
+    files with extensions in the `extension_whitelist` iterable."""
+    du_cmd_output = adb(f"adb shell 'du -c /storage/emulated/0/DCIM/OpenCamera/*{extension}'",
+                        return_output=True)
+    du_cmd_list = du_cmd_output.splitlines()
+    du_total = du_cmd_list[1].split("\t")[0]
+    return du_total
 
 def adb_tap_screen(x, y):
     """Generate a screen tap at the given position."""
@@ -91,17 +125,29 @@ def adb_tap_camera_button():
     """Tap the button in the camera to start it or stop it from recording."""
     adb(f"adb shell input keyevent 27")
 
+def adb_force_stop_opencamera():
+    """Issue a force-stop command to OpenCamera app.  Note this made the Google
+    camera open by default afterward with camera button."""
+    adb("adb shell am force-stop net.sourceforge.opencamera")
+
 def tap_camera_and_return_new_filenames_in_dir(dirpath, extension=".mp4"):
     """Issues a camera tap and looks for a new filename to appear in the ls listing."""
-    before_ls = adb_ls(dirpath, extension_whitelist=extension)
+    #print("DEBUG du total is", adb_get_dir_disk_usage(dirpath))
+    before_ls = adb_ls(dirpath, extension_whitelist=[extension])
     adb_tap_camera_button()
     sleep(0.5)
-    after_ls = adb_ls(dirpath, extension_whitelist=extension)
+    after_ls = adb_ls(dirpath, extension_whitelist=[extension])
     new_files = [f for f in after_ls if f not in before_ls]
+    #print("DEBUG du total is", adb_get_dir_disk_usage(dirpath))
+    #print("DEBUG new files", new_files)
     return new_files
 
 def ls_diff(ls1, ls2):
     """Return the list of new files in ls2 that were not present in ls1."""
+
+def adb_toggle_power():
+    """Toggle the power.  See also the `wakeup_device` function."""
+    adb("adb shell input keyevent KEYCODE_POWER")
 
 def wakeup_device():
     """Unlock the screen without password."""
@@ -115,7 +161,10 @@ def unlock_screen():
 
 def open_video_camera():
     """Open the video camera, rear facing."""
-    adb(f"adb shell am start -a android.media.action.VIDEO_CAMERA --ei android.intent.extras.CAMERA_FACING 0")
+    # Note that the -W option waits for the launch to complete.
+    adb("adb shell am start -W net.sourceforge.opencamera --ei android.intent.extras.CAMERA_FACING 0")
+    # Below depends on the default camera app, above forces OpenCamera.
+    #adb(f"adb shell am start -W -a android.media.action.VIDEO_CAMERA --ei android.intent.extras.CAMERA_FACING 0")
     sleep(1)
 
 def print_startup_message():
@@ -123,12 +172,13 @@ def print_startup_message():
     print("\n(Make sure that OpenCamera is set to the native SCREEN resolution, 1600x720.)\n")
     print("="*70)
 
-def start_screenrecording(args):
-    """Start screenrecording to the path passed in."""
+def start_screenrecording():
+    """Start screenrecording via the ADB `screenrecord` command.  This process is run
+    in the background.  The PID is returned along with the video pathname."""
     video_out_basename = args.file_basename_or_prefix[0]
     video_out_pathname =  os.path.join(OPENCAMERA_SAVE_DIR, f"{video_out_basename}.mp4")
     tmp_pid_path = f"zzzz_screenrecord_pid_tmp"
-    adb_ls(os.path.dirname(video_out_pathname))
+    adb_ls(os.path.dirname(video_out_pathname)) # DOESNT DO ANYTHING?? DEBUG?? TODO
 
     adb(f"adb shell screenrecord {video_out_pathname} & echo $! > {tmp_pid_path}")
     #print("DEBUG: tmp_pid_path =", tmp_pid_path)
@@ -141,26 +191,7 @@ def start_screenrecording(args):
     sleep(10)
 
     #adb shell screenrecord --size 720x1280 /storage/emulated/0/DCIM/OpenCamera/$1.mp4 & # TODO takes --size, but messes it up, density??
-    # TODO: Consider using AutoInput to push the start button after below command... (someone online suggested)
-    #adb shell am start -a android.media.action.VIDEO_CAPTURE & # FAILS for now...
     return pid, video_out_pathname
-
-def start_button_push_recording():
-    """Emulate a button push to start and stop recording."""
-    new_video_files = tap_camera_and_return_new_filenames_in_dir(OPENCAMERA_SAVE_DIR)
-    #print("\nDEBUG: new video files:", new_video_files)
-    if len(new_video_files) > 1:
-        print("\nWARNING: Found multiple new files in OPENCAMERA_SAVE_DIR.", file=sys.stderr)
-    if not(new_video_files):
-        print("\nERROR: No new video files found.  Is phone connected via USB?\n", file=sys.stderr)
-
-    video_basename = new_video_files[0].split("-")[-1]
-    video_path = os.path.join(OPENCAMERA_SAVE_DIR, video_basename)
-    #print("DEBUG: new video path:", video_path)
-    start_screen_monitor()
-    adb_tap_camera_button() # Turn off the camera.
-    adb_tap_screen(403, 740) # Maybe center tap helps?  Sometimes zoom slider stays.
-    return video_path, video_basename
 
 def start_screen_monitor(block=True):
     """Monitor only, blocking before kill of screen recording when shuts down."""
@@ -198,7 +229,26 @@ def start_screen_monitor(block=True):
 
     os.system("scrcpy --rotation=0 --lock-video-orientation=initial --stay-awake --disable-screensaver --display-buffer=50 # --crop 720:1600:0:0")
 
+def start_button_push_recording():
+    """Emulate a button push to start and stop recording."""
+    new_video_files = tap_camera_and_return_new_filenames_in_dir(OPENCAMERA_SAVE_DIR)
+    #print("\nDEBUG: new video files:", new_video_files)
+    if len(new_video_files) > 1:
+        print("\nWARNING: Found multiple new files in OPENCAMERA_SAVE_DIR.", file=sys.stderr)
+    if not(new_video_files):
+        print("\nERROR: No new video files found.  Is phone connected via USB?\n", file=sys.stderr)
+
+    video_basename = new_video_files[0].split("-")[-1]
+    video_path = os.path.join(OPENCAMERA_SAVE_DIR, video_basename)
+    #print("DEBUG: new video path:", video_path)
+    start_screen_monitor()
+    adb_tap_camera_button() # Turn off the camera.
+    adb_tap_screen(403, 740) # Maybe center tap helps?  Sometimes zoom slider stays.
+    return video_path, video_basename
+
 def kill_pid(pid):
+    """Issue a kill command to a PID on the local machine (not the Android device
+    directly)."""
     os.system(f"kill {pid}")
 
 def pull_and_delete_file(pathname):
@@ -374,8 +424,11 @@ def main():
     preview_video(video_path)
     extract_audio_from_video(video_path)
 
+    adb_toggle_power() # Turn device off after use.
+
 if __name__ == "__main__":
 
     args = parse_command_line() # Put `args` in global scope so all funs can use it.
+
     main()
 
