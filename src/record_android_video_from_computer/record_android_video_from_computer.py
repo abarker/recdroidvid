@@ -99,12 +99,14 @@ def adb_ls(path, extension_whitelist=None):
     to newest.   The `extension_whitelist` is an optional iterable of required
     file extensions such as `[".mp4"]`."""
     tmp_ls_path = "zzzz_tmp_adb_ls_path"
-    ls_output = adb(f"adb ls -ctr {path} > {tmp_ls_path}", return_output=True)
+    ls_output = adb(f"adb shell ls -ctr {path} > {tmp_ls_path}", return_output=True)
     ls_list = ls_output.splitlines()
+    print(ls_list)
 
     if extension_whitelist:
         for e in extension_whitelist:
             ls_output = [f for f in ls_output if f.endswith(e)]
+    print(ls_list)
     return ls_list
 
 def adb_get_dir_disk_usage(dirname, extension=".mp4"):
@@ -134,12 +136,14 @@ def tap_camera_and_return_new_filenames_in_dir(dirpath, extension=".mp4"):
     """Issues a camera tap and looks for a new filename to appear in the ls listing."""
     #print("DEBUG du total is", adb_get_dir_disk_usage(dirpath))
     before_ls = adb_ls(dirpath, extension_whitelist=[extension])
+    print("before_ls", before_ls)
     adb_tap_camera_button()
     sleep(0.5)
     after_ls = adb_ls(dirpath, extension_whitelist=[extension])
     new_files = [f for f in after_ls if f not in before_ls]
     #print("DEBUG du total is", adb_get_dir_disk_usage(dirpath))
     #print("DEBUG new files", new_files)
+    print("after_ls", after_ls)
     return new_files
 
 def ls_diff(ls1, ls2):
