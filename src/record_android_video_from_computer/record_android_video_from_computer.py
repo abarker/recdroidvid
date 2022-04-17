@@ -96,14 +96,18 @@ def adb(cmd, print_cmd=True, return_output=False):
     os.remove(tmp_adb_cmd_output_file)
     return cmd_output
 
-def adb_ls(path, extension_whitelist=None):
+def adb_ls(path, all=False, extension_whitelist=None):
     """Run the ADB ls command and return the filenames time-sorted from oldest
-    to newest.   The `extension_whitelist` is an optional iterable of required
-    file extensions such as `[".mp4"]`."""
+    to newest.   If `all` is true the `-a` option to `ls` is used (which gets dotfiles
+    too).  The `extension_whitelist` is an optional iterable of required file
+    extensions such as `[".mp4"]`."""
     tmp_ls_path = "zzzz_tmp_adb_ls_path"
     # NOTE NOTE: `adb shell ls` is DIFFERENT FROM `adb ls`, you need also hidden files with
     # `shell adb` to get `.pending....mp4` files, and there are still a few more in `shell ls`.
-    ls_output = adb(f"adb shell ls -ctra {path}", return_output=True) # DEBUG made False
+    if all:
+        ls_output = adb(f"adb shell ls -ctra {path}", return_output=True) # DEBUG made False
+    else:
+        ls_output = adb(f"adb shell ls -ctr {path}", return_output=True) # DEBUG made False
     ls_list = ls_output.splitlines()
 
     if extension_whitelist:
@@ -238,7 +242,7 @@ def start_button_push_recording(auto_start_recording=True):
         # before closing scrcpy.  It still works as an error check of sorts.
         adb_tap_camera_button()
         sleep(0.5)
-        after_ls = adb_ls(OPENCAMERA_SAVE_DIR, extension_whitelist=[VIDEO_FILE_EXTENSION])
+        after_ls = adb_ls(OPENCAMERA_SAVE_DIR, all=True, extension_whitelist=[VIDEO_FILE_EXTENSION])
         new_video_files = [f for f in after_ls if f not in before_ls]
         if len(new_video_files) > 1:
             print("\nWARNING: Found multiple new files in OPENCAMERA_SAVE_DIR.", file=sys.stderr)
@@ -261,11 +265,8 @@ def start_button_push_recording(auto_start_recording=True):
     after_ls = adb_ls(OPENCAMERA_SAVE_DIR, extension_whitelist=[VIDEO_FILE_EXTENSION])
 
     new_video_files = [f for f in after_ls if f not in before_ls]
-    print("\nDEBUG: new_video_files:", new_video_files)
-    # TODO: Pull multiple files if present, and return the list.
-    video_basename = new_video_files[0] # NOTE: only taking first new vid for now.
-    video_path = os.path.join(OPENCAMERA_SAVE_DIR, video_basename)
-    return video_path, video_basename
+    new_video_paths = [os.path.join(OPENCAMERA_SAVE_DIR, v) for v in new_video_files]
+    return new_video_paths
 
 def kill_pid(pid):
     """Issue a kill command to a PID on the local machine (not the Android device
@@ -277,7 +278,6 @@ def pull_and_delete_file(pathname):
     path of the extracted video."""
 
     # Pull.
-    sleep(10) # Make sure files have time to finish writing and close.
     adb(f"adb pull {pathname}")
 
     # Delete.
@@ -360,16 +360,20 @@ def record_and_pull_video():
         start_screen_monitor(block=True)
         kill_pid(recorder_pid)
         video_path = pull_and_delete_file(video_path) # TODO: does this work with preview??? Haven't tested...
+        return [video_path]
 
     elif RECORDING_METHOD == "button":
-        video_path, video_basename = start_button_push_recording()
-        pulled_video_path = pull_and_delete_file(video_path) # Note file always written to CWD for now.
-        sleep(0.3)
-        video_path = args.file_basename_or_prefix[0] + "_" + pulled_video_path
-        print(f"\nSaving (renaming) video file as\n   {video_path}")
-        os.rename(pulled_video_path, video_path)
-
-    return video_path
+        video_paths = start_button_push_recording()
+        new_video_paths = []
+        sleep(5) # Make sure video files have time to finish writing and close.
+        for vid in video_paths:
+            pulled_vid = pull_and_delete_file(vid) # Note file always written to CWD for now.
+            sleep(0.3)
+            new_vid_name = args.file_basename_or_prefix[0] + "_" + pulled_vid
+            print(f"\nSaving (renaming) video file as\n   {new_vid_name}")
+            os.rename(pulled_vid, new_vid_name)
+            new_video_paths.append(new_vid_name)
+        return new_video_paths
 
 def parse_command_line():
     """Create and return the argparse object to read the command line."""
@@ -440,13 +444,14 @@ def main():
     unlock_screen()
     open_video_camera()
 
-    video_path = record_and_pull_video()
-
+    video_paths = record_and_pull_video()
     adb_toggle_power() # Turn device off after use.
-    print_info_about_pulled_video(video_path)
-    preview_video(video_path)
-    extract_audio_from_video(video_path)
 
+    for vid in video_paths:
+        print(f"\n========= {vid} ==========================")
+        print_info_about_pulled_video(vid)
+        preview_video(vid)
+        extract_audio_from_video(vid)
 
 if __name__ == "__main__":
 
