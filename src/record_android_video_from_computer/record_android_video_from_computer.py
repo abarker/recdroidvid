@@ -53,6 +53,8 @@ OPENCAMERA_PACKAGE_NAME = "net.sourceforge.opencamera"
 #RECORDING_METHOD = "screen" # Record with screenrecord; limited to screen resolution(?) and 3min, no sound.
 # https://stackoverflow.com/questions/21938948/how-to-increase-time-limit-of-adb-screen-record-of-android-kitkat
 RECORDING_METHOD = "button" # Record by emulating a button push and looking for new video file.
+VIDEO_FILE_EXTENSION = ".mp4"
+AUTO_START_RECORDING = False
 
 #VIDEO_PLAYER_CMD = "pl"
 VIDEO_PLAYER_CMD = "mplayer -loop 0 -really-quiet -title '====== VIDEO PREVIEW ======'"
@@ -99,52 +101,30 @@ def adb_ls(path, extension_whitelist=None):
     to newest.   The `extension_whitelist` is an optional iterable of required
     file extensions such as `[".mp4"]`."""
     tmp_ls_path = "zzzz_tmp_adb_ls_path"
-    ls_output = adb(f"adb shell ls -ctr {path} > {tmp_ls_path}", return_output=True)
+    # NOTE NOTE: `adb shell ls` is DIFFERENT FROM `adb ls`, you need also hidden files with
+    # `shell adb` to get `.pending....mp4` files, and there are still a few more in `shell ls`.
+    ls_output = adb(f"adb shell ls -ctra {path}", return_output=True) # DEBUG made False
     ls_list = ls_output.splitlines()
-    print(ls_list)
 
     if extension_whitelist:
         for e in extension_whitelist:
             ls_output = [f for f in ls_output if f.endswith(e)]
-    print(ls_list)
+    #print("\nls_list is", ls_list)
     return ls_list
-
-def adb_get_dir_disk_usage(dirname, extension=".mp4"):
-    """Return the total disk usage in the directory passed in, limiting to
-    files with extensions in the `extension_whitelist` iterable."""
-    du_cmd_output = adb(f"adb shell 'du -c /storage/emulated/0/DCIM/OpenCamera/*{extension}'",
-                        return_output=True)
-    du_cmd_list = du_cmd_output.splitlines()
-    du_total = du_cmd_list[1].split("\t")[0]
-    return du_total
 
 def adb_tap_screen(x, y):
     """Generate a screen tap at the given position."""
     #https://stackoverflow.com/questions/3437686/how-to-use-adb-to-send-touch-events-to-device-using-sendevent-command
     adb(f"adb shell input tap {x} {y}")
 
-def adb_tap_camera_button():
-    """Tap the button in the camera to start it or stop it from recording."""
-    adb(f"adb shell input keyevent 27")
-
 def adb_force_stop_opencamera():
     """Issue a force-stop command to OpenCamera app.  Note this made the Google
     camera open by default afterward with camera button."""
     adb("adb shell am force-stop net.sourceforge.opencamera")
 
-def tap_camera_and_return_new_filenames_in_dir(dirpath, extension=".mp4"):
-    """Issues a camera tap and looks for a new filename to appear in the ls listing."""
-    #print("DEBUG du total is", adb_get_dir_disk_usage(dirpath))
-    before_ls = adb_ls(dirpath, extension_whitelist=[extension])
-    print("before_ls", before_ls)
-    adb_tap_camera_button()
-    sleep(0.5)
-    after_ls = adb_ls(dirpath, extension_whitelist=[extension])
-    new_files = [f for f in after_ls if f not in before_ls]
-    #print("DEBUG du total is", adb_get_dir_disk_usage(dirpath))
-    #print("DEBUG new files", new_files)
-    print("after_ls", after_ls)
-    return new_files
+def adb_tap_camera_button():
+    """Tap the button in the camera to start it or stop it from recording."""
+    adb(f"adb shell input keyevent 27")
 
 def ls_diff(ls1, ls2):
     """Return the list of new files in ls2 that were not present in ls1."""
@@ -166,9 +146,10 @@ def unlock_screen():
 def open_video_camera():
     """Open the video camera, rear facing."""
     # Note that the -W option waits for the launch to complete.
-    adb("adb shell am start -W net.sourceforge.opencamera --ei android.intent.extras.CAMERA_FACING 0")
+    # NOTE: Below line fails sometimes when openin the menu instead of camera...
+    #adb("adb shell am start -W net.sourceforge.opencamera --ei android.intent.extras.CAMERA_FACING 0")
     # Below depends on the default camera app, above forces OpenCamera.
-    #adb(f"adb shell am start -W -a android.media.action.VIDEO_CAMERA --ei android.intent.extras.CAMERA_FACING 0")
+    adb(f"adb shell am start -W -a android.media.action.VIDEO_CAMERA --ei android.intent.extras.CAMERA_FACING 0")
     sleep(1)
 
 def print_startup_message():
@@ -233,21 +214,57 @@ def start_screen_monitor(block=True):
 
     os.system("scrcpy --rotation=0 --lock-video-orientation=initial --stay-awake --disable-screensaver --display-buffer=50 # --crop 720:1600:0:0")
 
-def start_button_push_recording():
-    """Emulate a button push to start and stop recording."""
-    new_video_files = tap_camera_and_return_new_filenames_in_dir(OPENCAMERA_SAVE_DIR)
-    #print("\nDEBUG: new video files:", new_video_files)
-    if len(new_video_files) > 1:
-        print("\nWARNING: Found multiple new files in OPENCAMERA_SAVE_DIR.", file=sys.stderr)
-    if not(new_video_files):
-        print("\nERROR: No new video files found.  Is phone connected via USB?\n", file=sys.stderr)
+def save_directory_size_growing():
+    """Return true if the save directory is growing in size (i.e., file is being
+    recorded there)."""
+    first_du = adb(f"adb shell du {OPENCAMERA_SAVE_DIR}", return_output=True)
+    first_du = first_du.split("\t")[0]
+    print("DEBUG first_du:", first_du)
+    sleep(1)
+    second_du = adb(f"adb shell du {OPENCAMERA_SAVE_DIR}", return_output=True)
+    second_du = second_du.split("\t")[0]
+    print("DEBUG second_du:", first_du)
+    return int(second_du) > int(first_du)
 
-    video_basename = new_video_files[0].split("-")[-1]
+def start_button_push_recording(auto_start_recording=True):
+    """Emulate a button push to start and stop recording."""
+
+    # Get a snapshot of save directory before recording starts.
+    before_ls = adb_ls(OPENCAMERA_SAVE_DIR, extension_whitelist=[VIDEO_FILE_EXTENSION])
+
+    if AUTO_START_RECORDING:
+        # Note, this was the original way to get a single video but always starts
+        # recording right away and only allows one video at a time to be recorded
+        # before closing scrcpy.  It still works as an error check of sorts.
+        adb_tap_camera_button()
+        sleep(0.5)
+        after_ls = adb_ls(OPENCAMERA_SAVE_DIR, extension_whitelist=[VIDEO_FILE_EXTENSION])
+        new_video_files = [f for f in after_ls if f not in before_ls]
+        if len(new_video_files) > 1:
+            print("\nWARNING: Found multiple new files in OPENCAMERA_SAVE_DIR.", file=sys.stderr)
+        if not(new_video_files):
+            print("\nERROR: No new video files found.  Is phone connected via USB?\n", file=sys.stderr)
+        # Previously used lines below.
+        # NOTE: Below line is needed to convert `.pending...mp4` files to the final fname.
+        #video_basename = new_video_files[0].split("-")[-1]
+        #video_path = os.path.join(OPENCAMERA_SAVE_DIR, video_basename)
+
+    start_screen_monitor(block=True) # This blocks until the screen monitor is closed.
+
+    if save_directory_size_growing():
+        adb_tap_camera_button() # Presumably still recording; turn off the camera.
+        while save_directory_size_growing():
+            print("Waiting for save directory to stop increasing in size...")
+            sleep(1)
+
+    # Get a final snapshot after recording is finished.
+    after_ls = adb_ls(OPENCAMERA_SAVE_DIR, extension_whitelist=[VIDEO_FILE_EXTENSION])
+
+    new_video_files = [f for f in after_ls if f not in before_ls]
+    print("\nDEBUG: new_video_files:", new_video_files)
+    # TODO: Pull multiple files if present, and return the list.
+    video_basename = new_video_files[0] # NOTE: only taking first new vid for now.
     video_path = os.path.join(OPENCAMERA_SAVE_DIR, video_basename)
-    #print("DEBUG: new video path:", video_path)
-    start_screen_monitor()
-    adb_tap_camera_button() # Turn off the camera.
-    adb_tap_screen(403, 740) # Maybe center tap helps?  Sometimes zoom slider stays.
     return video_path, video_basename
 
 def kill_pid(pid):
@@ -424,15 +441,15 @@ def main():
     open_video_camera()
 
     video_path = record_and_pull_video()
+
+    adb_toggle_power() # Turn device off after use.
     print_info_about_pulled_video(video_path)
     preview_video(video_path)
     extract_audio_from_video(video_path)
 
-    adb_toggle_power() # Turn device off after use.
 
 if __name__ == "__main__":
 
     args = parse_command_line() # Put `args` in global scope so all funs can use it.
-
     main()
 
