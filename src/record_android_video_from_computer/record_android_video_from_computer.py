@@ -10,6 +10,19 @@ Note: Phone cannot be powered down.
 
 """
 
+# TODO: Maybe call it recvid, or that is probably taken...  recdroidvid?
+
+# TODO: Add always on top option!!!!  Better workflow?!?! (push TWO buttons)
+
+# TODO: set size option for display screen
+
+# TODO: add optional --start-number option which starts the numbering that occurs
+# by appending to the passed-in prefix.  So you get auto-numbering with the same
+# prefix, even when you stop and start.
+
+# Detect early when no-devices-found is encountered; return code of ADB command
+# may tell you; at least the output will and that's easy to capture now.
+
 # Maybe look here for better way (INTENT) to start video recording
 # https://developer.android.com/guide/components/intents-common
 # ACTION_VIDEO_CAPTURE
@@ -105,15 +118,14 @@ def adb_ls(path, all=False, extension_whitelist=None):
     # NOTE NOTE: `adb shell ls` is DIFFERENT FROM `adb ls`, you need also hidden files with
     # `shell adb` to get `.pending....mp4` files, and there are still a few more in `shell ls`.
     if all:
-        ls_output = adb(f"adb shell ls -ctra {path}", return_output=True) # DEBUG made False
+        ls_output = adb(f"adb shell ls -ctra {path}", return_output=True)
     else:
-        ls_output = adb(f"adb shell ls -ctr {path}", return_output=True) # DEBUG made False
+        ls_output = adb(f"adb shell ls -ctr {path}", return_output=True)
     ls_list = ls_output.splitlines()
 
     if extension_whitelist:
         for e in extension_whitelist:
             ls_output = [f for f in ls_output if f.endswith(e)]
-    #print("\nls_list is", ls_list)
     return ls_list
 
 def adb_tap_screen(x, y):
@@ -223,14 +235,12 @@ def save_directory_size_growing():
     recorded there)."""
     first_du = adb(f"adb shell du {OPENCAMERA_SAVE_DIR}", return_output=True)
     first_du = first_du.split("\t")[0]
-    print("DEBUG first_du:", first_du)
     sleep(1)
     second_du = adb(f"adb shell du {OPENCAMERA_SAVE_DIR}", return_output=True)
     second_du = second_du.split("\t")[0]
-    print("DEBUG second_du:", first_du)
     return int(second_du) > int(first_du)
 
-def start_button_push_recording(auto_start_recording=True):
+def start_monitoring_and_button_push_recording(autostart_recording=True):
     """Emulate a button push to start and stop recording."""
 
     # Get a snapshot of save directory before recording starts.
@@ -261,7 +271,7 @@ def start_button_push_recording(auto_start_recording=True):
             print("Waiting for save directory to stop increasing in size...")
             sleep(1)
 
-    # Get a final snapshot after recording is finished.
+    # Get a final snapshot of save directory after recording is finished.
     after_ls = adb_ls(OPENCAMERA_SAVE_DIR, extension_whitelist=[VIDEO_FILE_EXTENSION])
 
     new_video_files = [f for f in after_ls if f not in before_ls]
@@ -353,7 +363,7 @@ def print_info_about_pulled_video(video_path):
     print("\nRunning ffprobe on saved video file:") # TODO, refine info and maybe print better.
     os.system(f"ffprobe -v error -show_entries stream=width,height -of default=noprint_wrappers=1 {video_path}")
 
-def record_and_pull_video():
+def monitor_record_and_pull_videos():
     """Record a video on the Android device and pull the resulting file."""
     if RECORDING_METHOD == "screen":
         recorder_pid, video_path = start_screenrecording(args)
@@ -363,7 +373,7 @@ def record_and_pull_video():
         return [video_path]
 
     elif RECORDING_METHOD == "button":
-        video_paths = start_button_push_recording()
+        video_paths = start_monitoring_and_button_push_recording()
         new_video_paths = []
         sleep(5) # Make sure video files have time to finish writing and close.
         for vid in video_paths:
@@ -444,7 +454,7 @@ def main():
     unlock_screen()
     open_video_camera()
 
-    video_paths = record_and_pull_video()
+    video_paths = monitor_record_and_pull_videos()
     adb_toggle_power() # Turn device off after use.
 
     for vid in video_paths:
