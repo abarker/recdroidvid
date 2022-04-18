@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 """
 
-Usage: record-remote-and-pull-video.py
+Usage: recdroidvid.py
 
 Be sure to set phone to allow for ADB communication over USB.  See the video
 recording notes in ardour directory for details.

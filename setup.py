@@ -21,7 +21,7 @@ with codecs.open(os.path.join(current_dir, "README.rst"), encoding="utf-8") as f
     long_description = f.read()
 
 setup(
-    name="record_android_video_from_computer",
+    name="recdroidvid",
     version="0.1.0", # major version, minor version, patch (see PEP440)
     description="Record and monitor video on android devices from computer (currently Linux via USB).",
     keywords=["android", "linux", "usb", "remote", "adb", "video", "movie", "record", "monitor"],
