@@ -166,6 +166,8 @@ def open_video_camera():
     #adb(f"adb shell am start -W -a android.media.action.VIDEO_CAMERA --ei android.intent.extras.CAMERA_FACING 0")
 
     # This command seems to avoid opening in a menu, etc., for now....
+    # https://android.stackexchange.com/questions/171490/start-application-from-adb
+    # https://stackoverflow.com/questions/4567904/how-to-start-an-application-using-android-adb-tools
     adb(f"adb shell am start -W -n {OPENCAMERA_PACKAGE_NAME}/.MainActivity --ei android.intent.extras.CAMERA_FACING 0")
     sleep(1)
 
