@@ -10,7 +10,7 @@ Note: Phone cannot be powered down.
 
 """
 
-# TODO: Maybe call it recvid, or that is probably taken...  recdroidvid?
+# TODO: Maybe call it recvid, or that is probably taken...  recdroidvid? recandvid?
 
 # TODO: Add always on top option!!!!  Better workflow?!?! (push TWO buttons)
 
@@ -68,6 +68,8 @@ OPENCAMERA_PACKAGE_NAME = "net.sourceforge.opencamera"
 RECORDING_METHOD = "button" # Record by emulating a button push and looking for new video file.
 VIDEO_FILE_EXTENSION = ".mp4"
 AUTO_START_RECORDING = False
+
+SCRCPY_EXTRA_COMMAND_LINE_ARGS = "" #"--always-on-top --max-size=1200 --rotation=0 --lock-video-orientation=initial --stay-awake --disable-screensaver --display-buffer=50"
 
 #VIDEO_PLAYER_CMD = "pl"
 VIDEO_PLAYER_CMD = "mplayer -loop 0 -really-quiet -title '====== VIDEO PREVIEW ======'"
@@ -228,15 +230,15 @@ def start_screen_monitor(block=True):
         print("Sorry, not implemented.")
         sys.exit(1)
 
-    os.system("scrcpy --rotation=0 --lock-video-orientation=initial --stay-awake --disable-screensaver --display-buffer=50 # --crop 720:1600:0:0")
+    os.system(f"scrcpy {SCRCPY_EXTRA_COMMAND_LINE_ARGS} {args.scrcpy_args[0]}")
 
-def save_directory_size_growing():
+def directory_size_increasing(dirname):
     """Return true if the save directory is growing in size (i.e., file is being
     recorded there)."""
-    first_du = adb(f"adb shell du {OPENCAMERA_SAVE_DIR}", return_output=True)
+    first_du = adb(f"adb shell du {dirname}", return_output=True)
     first_du = first_du.split("\t")[0]
     sleep(1)
-    second_du = adb(f"adb shell du {OPENCAMERA_SAVE_DIR}", return_output=True)
+    second_du = adb(f"adb shell du {dirname}", return_output=True)
     second_du = second_du.split("\t")[0]
     return int(second_du) > int(first_du)
 
@@ -265,9 +267,9 @@ def start_monitoring_and_button_push_recording(autostart_recording=True):
 
     start_screen_monitor(block=True) # This blocks until the screen monitor is closed.
 
-    if save_directory_size_growing():
+    if directory_size_increasing(OPENCAMERA_SAVE_DIR):
         adb_tap_camera_button() # Presumably still recording; turn off the camera.
-        while save_directory_size_growing():
+        while directory_size_increasing(OPENCAMERA_SAVE_DIR):
             print("Waiting for save directory to stop increasing in size...")
             sleep(1)
 
@@ -394,12 +396,9 @@ def parse_command_line():
     parser.add_argument("file_basename_or_prefix", type=str, nargs=1, metavar="file_basename_or_prefix",
                         default=None, help="The basename or prefix of the pulled video file."
                         " Whether name or prefix depends on the method used to record.")
-    #parser.add_argument("--outfile", "-o", type=str, nargs=1, metavar="OUTPUTFILE",
-    #                    default=None,
-    #                    help="""Write the output to a file with the pathname passed in.
-    #                    Files will be silently overwritten if they already
-    #                    exist.  If this argument is omitted the output is
-    #                    written to stdout.""")
+    parser.add_argument("--scrcpy-args", "-s", type=str, nargs=1, metavar="STRING-OF-ARGS",
+                        default="", help="""An optional string of extra arguments to pass
+                        directly to the `scrcpy` program.""")
     #parser.add_argument("--inplace", action="store_true", default=False,
     #                    help="""Modify the input code file inplace; code will be
     #                    replaced with the stripped code.  This is the same as
@@ -445,6 +444,7 @@ def parse_command_line():
     #                    exits with code 1.""")
 
     cmdline_args = parser.parse_args()
+    #print("DEBUG: scrcpy-args:", cmdline_args.scrcpy_args)
     return cmdline_args
 
 def main():
