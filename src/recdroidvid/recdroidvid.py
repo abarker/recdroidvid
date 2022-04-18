@@ -10,49 +10,6 @@ Note: Phone cannot be powered down.
 
 """
 
-# TODO: add optional --start-number option which starts the numbering that occurs
-# by appending to the passed-in prefix.  So you get auto-numbering with the same
-# prefix, even when you stop and start.
-
-# Detect early when no-devices-found is encountered; return code of ADB command
-# may tell you; at least the output will and that's easy to capture now.
-
-# Maybe look here for better way (INTENT) to start video recording
-# https://developer.android.com/guide/components/intents-common
-# ACTION_VIDEO_CAPTURE
-# TODO: Consider using AutoInput to push the start button after below command... (someone online suggested)
-#    adb shell am start -a android.media.action.VIDEO_CAPTURE & # FAILS for now???
-
-# TODO: AFTER below mod, add an option to use a naming convention on ALL the
-# videos, so they begin with a number that sorts correctly, something like a1_
-# a2_ prefixes, time-sorted.  They may time-sort OK anyway because of time
-# component.
-
-# TODO: How about, to implement below, you just keep looking in the directory
-# if you find any FINISHED files, no longer growing, you pull them off in bg?
-# Does add some CPU you don't want or need.  Alternate: Get ALL new ones when
-# monitor program shuts down!? Then user can decide, i.e., if memory is low or
-# not.  User can then press the record button and change anything else from
-# the computer screen!!!  Easy mod, too.
-#
-# NOTE: Will need to check if camera is still recording after shutdown, and only
-# then issue the stop button push.  See if file growing, maybe.  They may or may
-# not turn off the video recording feature, so toggle can get messed up.
-# ---> If nothing else, toggle power off then wakeup and open camera again to stop record.
-#      Note you still need to get the video off the phone.
-# ---> NOOOOO, above works!!! ADB still works as long as device not totally powered down!
-#      And now turning device off at end, anyway!!
-
-# TODO: Keep monitor open, but detect when phone stops recording or starts.  Simultaneously,
-# start or stop the recording on Ardour.  Can probably use space bar with xdotool, but need
-# to find the window it is using.  Maybe start Ardour from a script that does some preliminary
-# setup and data-gathering first?  Can that detect the GUI window, though?
-#
-# To detect recording, may need to look for new files or files that stop
-# growing for some threshold period.
-#
-# https://linuxhint.com/xdotool_stimulate_mouse_clicks_and_keystrokes/
-
 # NOTE: Look at the info from an OpenCamera video saved on the phone to find this path.
 OPENCAMERA_SAVE_DIR = "/storage/emulated/0/DCIM/OpenCamera/" # Where OpenCamera writes video.
 OPENCAMERA_PACKAGE_NAME = "net.sourceforge.opencamera"
@@ -78,6 +35,8 @@ AUDIO_EXTRACT = True # Whether to ever extract a AUDIO file from the video.
 QUERY_AUDIO_EXTRACT = False # Ask before extracting AUDIO file.
 EXTRACTED_AUDIO_EXTENSION = ".wav"
 
+START_ARDOUR_TRANSPORT = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" space'
+
 import sys
 import os
 from time import sleep
@@ -87,19 +46,27 @@ import argparse
 YES_ANSWERS = {"Y", "y", "yes", "YES", "Yes"}
 NO_ANSWERS = {"N", "n", "no", "NO", "No"}
 
-def adb(cmd, print_cmd=True, return_output=False):
+def adb(cmd, print_cmd=True, return_stdout=False, return_stderr=False):
     """Run the ADB command, printing out diagnostics.  Setting `return_output`
     returns the stdout of the command, but the command must be redirectable to
     a temp file.  Returned string is a direct read, with no splitting."""
+    # TODO: This should be done with subprocess.Popen, but it works.
     if print_cmd:
         print(f"\nCMD: {cmd}")
 
-    if not return_output:
+    if not (return_stdout or return_stderr):
         os.system(cmd)
         return
 
     tmp_adb_cmd_output_file = "zzzz_tmp_adb_cmd_output_file"
-    os.system(cmd + f" > {tmp_adb_cmd_output_file}")
+    if return_stdout and return_stderr:
+        redirect = "1> 2>"
+    elif return_stdout:
+        redirect = ">"
+    elif return_stderr:
+        redirect = "2>"
+
+    os.system(f"{cmd} {redirect} {tmp_adb_cmd_output_file}")
     with open(tmp_adb_cmd_output_file, "r") as f:
         cmd_output = f.read()
     os.remove(tmp_adb_cmd_output_file)
@@ -114,9 +81,9 @@ def adb_ls(path, all=False, extension_whitelist=None):
     # NOTE NOTE: `adb shell ls` is DIFFERENT FROM `adb ls`, you need also hidden files with
     # `shell adb` to get `.pending....mp4` files, and there are still a few more in `shell ls`.
     if all:
-        ls_output = adb(f"adb shell ls -ctra {path}", return_output=True)
+        ls_output = adb(f"adb shell ls -ctra {path}", return_stdout=True)
     else:
-        ls_output = adb(f"adb shell ls -ctr {path}", return_output=True)
+        ls_output = adb(f"adb shell ls -ctr {path}", return_stdout=True)
     ls_list = ls_output.splitlines()
 
     if extension_whitelist:
@@ -147,7 +114,12 @@ def adb_toggle_power():
 
 def wakeup_device():
     """Unlock the screen without password."""
-    adb(f"adb shell input keyevent KEYCODE_WAKEUP")
+    output = adb(f"adb shell input keyevent KEYCODE_WAKEUP", return_stderr=True)
+    if output.strip():
+        print(output)
+    if output.startswith("error: no devices"): # TODO: Maybe get exit code in adb function.
+        print("ERROR: No devices found, is the phone plugged in via USB?", file=sys.stderr)
+        sys.exit(1)
     sleep(2)
 
 def unlock_screen():
@@ -236,10 +208,10 @@ def start_screen_monitor(block=True):
 def directory_size_increasing(dirname):
     """Return true if the save directory is growing in size (i.e., file is being
     recorded there)."""
-    first_du = adb(f"adb shell du {dirname}", return_output=True)
+    first_du = adb(f"adb shell du {dirname}", return_stdout=True)
     first_du = first_du.split("\t")[0]
     sleep(1)
-    second_du = adb(f"adb shell du {dirname}", return_output=True)
+    second_du = adb(f"adb shell du {dirname}", return_stdout=True)
     second_du = second_du.split("\t")[0]
     return int(second_du) > int(first_du)
 
