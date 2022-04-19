@@ -3,24 +3,27 @@
 
 Usage: recdroidvid.py
 
-Be sure to set phone to allow for ADB communication over USB.  See the video
-recording notes in ardour directory for details.
+Be sure to install scrcpy and set phone to allow for ADB communication over
+USB.  See the video recording notes in ardour directory for details.
 
 Note: Phone cannot be powered down.
 
 """
 
-# NOTE: Look at the info from an OpenCamera video saved on the phone to find this path.
+VERSION = "0.1.0"
+
+# NOTE: To find this path, look at the info from an OpenCamera video saved on the phone.
 OPENCAMERA_SAVE_DIR = "/storage/emulated/0/DCIM/OpenCamera/" # Where OpenCamera writes video.
 OPENCAMERA_PACKAGE_NAME = "net.sourceforge.opencamera"
 
-#RECORDING_METHOD = "screen" # Record with screenrecord; limited to screen resolution(?) and 3min, no sound.
-# https://stackoverflow.com/questions/21938948/how-to-increase-time-limit-of-adb-screen-record-of-android-kitkat
-RECORDING_METHOD = "button" # Record by emulating a button push and looking for new video file.
 VIDEO_FILE_EXTENSION = ".mp4"
 AUTO_START_RECORDING = False
 
-SCRCPY_EXTRA_COMMAND_LINE_ARGS = "" #"--always-on-top --max-size=1200 --rotation=0 --lock-video-orientation=initial --stay-awake --disable-screensaver --display-buffer=50"
+# Extra command-line args passed to scrcpy, in addition to those passed in from
+# the command line.  Some useful ones: --always-on-top --max-size=1200
+# --rotation=0 --lock-video-orientation=initial --stay-awake
+# --disable-screensaver --display-buffer=50
+SCRCPY_EXTRA_COMMAND_LINE_ARGS = ""
 
 #VIDEO_PLAYER_CMD = "pl"
 VIDEO_PLAYER_CMD = f"mplayer -loop 0 -really-quiet -title '{'='*40} VIDEO PREVIEW {'='*40}'"
@@ -35,7 +38,19 @@ AUDIO_EXTRACT = True # Whether to ever extract a AUDIO file from the video.
 QUERY_AUDIO_EXTRACT = False # Ask before extracting AUDIO file.
 EXTRACTED_AUDIO_EXTENSION = ".wav"
 
+# TODO: Now, need to run a BG process that starts a popup always-on-top with a single toggle button.
+# The button then starts ardour and calls adb to push record button when its button is pressed.
+# Wish list: add a track marker at the spot.  Maybe xdotool could do it, calling menu item and
+# entering the text???
 START_ARDOUR_TRANSPORT = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" space'
+START_ARDOUR_TRANSPORT = 'xdotool windowactivate "$(xdotool search --onlyvisible --class Ardour | head -1)"'
+RAISE_ARDOUR_TO_TOP = "xdotool search --onlyvisible --class Ardour windowactivate %@"
+
+# This option records with the ADB screenrecord command.  It is limited to
+# screen resolution(?) and 3min, no sound.
+# https://stackoverflow.com/questions/21938948/how-to-increase-time-limit-of-adb-screen-record-of-android-kitkat
+# Deprecated and may be removed at some point.
+USE_SCREENRECORD = False
 
 import sys
 import os
@@ -144,9 +159,10 @@ def open_video_camera():
     sleep(1)
 
 def print_startup_message():
-    print("="*70)
-    print("\n(Make sure that OpenCamera is set to the native SCREEN resolution, 1600x720.)\n")
-    print("="*70)
+    """Print out the initial greeting message."""
+    print(f"{'='*78}")
+    print(f"\nrecdroidvid, version {VERSION}")
+    print(f"\n{'='*78}")
 
 def start_screenrecording():
     """Start screenrecording via the ADB `screenrecord` command.  This process is run
@@ -311,7 +327,7 @@ def extract_audio_from_video(video_path):
     """Extract the audio from a video file, of the type with the given extension."""
     # Note screen recording doesn't have audio, only the "button" method.
     if not ((AUDIO_EXTRACT or QUERY_AUDIO_EXTRACT) and os.path.isfile(video_path)
-                                               and RECORDING_METHOD == "button"):
+                                                   and not USE_SCREENRECORD):
         return
 
     def run_audio_extraction(video_path, extension=".wav"):
@@ -334,29 +350,35 @@ def extract_audio_from_video(video_path):
 
 def print_info_about_pulled_video(video_path):
     """Print out some information about the resolution, etc., of a video."""
+    # TODO: Capture output and indent at least.  Print container stuff ahead of codecs
+    # of the streams stuff.
+    # Format: ffprobe -show_format -v error -of default=noprint_wrappers=1 {video_path} | grep -v 'TAG:'
+    # Stream codecs: ffprobe -v error -show_entries stream=codec_name,width,height,duration,size,bit_rate -of default=noprint_wrappers=1 jam3_gategate_roses_v2.mp4
+    # You can also separate the different stream codecs, but codec name should differentiate.
+    cmd = (f"ffprobe -show_format -v error -show_entries"
+           f" stream=codec_name,width,height,duration,size,bit_rate"
+           f" -of default=noprint_wrappers=1 {video_path} | grep -v 'TAG:'")
     print("\nRunning ffprobe on saved video file:") # TODO, refine info and maybe print better.
-    os.system(f"ffprobe -v error -show_entries stream=width,height -of default=noprint_wrappers=1 {video_path}")
+    os.system(cmd)
 
 def monitor_record_and_pull_videos():
     """Record a video on the Android device and pull the resulting file."""
-    if RECORDING_METHOD == "screen":
+    if USE_SCREENRECORD:
         recorder_pid, video_path = start_screenrecording(args)
         start_screen_monitor(block=True)
         kill_pid(recorder_pid)
         video_path = pull_and_delete_file(video_path) # TODO: does this work with preview??? Haven't tested...
         return [video_path]
 
-    elif RECORDING_METHOD == "button":
+    else: # Use the method requiring a button push on phone, emulated or actual.
         video_paths = start_monitoring_and_button_push_recording()
         new_video_paths = []
         sleep(5) # Make sure video files have time to finish writing and close.
         numbering_offset = args.numbering_start[0]
-        print("numbering offset", numbering_offset)
         for count, vid in enumerate(video_paths):
             pulled_vid = pull_and_delete_file(vid) # Note file always written to CWD for now.
             sleep(0.3)
             new_vid_name = f"{args.file_basename_or_prefix[0]}_{count+numbering_offset:02d}_{pulled_vid}"
-            print("\n\n------------> new_vid_name:", new_vid_name)
             print(f"\nSaving (renaming) video file as\n   {new_vid_name}")
             os.rename(pulled_vid, new_vid_name)
             new_video_paths.append(new_vid_name)
