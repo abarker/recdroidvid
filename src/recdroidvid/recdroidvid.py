@@ -355,7 +355,10 @@ def print_info_about_pulled_video(video_path):
     # Format: ffprobe -show_format -v error -of default=noprint_wrappers=1 {video_path} | grep -v 'TAG:'
     # Stream codecs: ffprobe -v error -show_entries stream=codec_name,width,height,duration,size,bit_rate -of default=noprint_wrappers=1 jam3_gategate_roses_v2.mp4
     # You can also separate the different stream codecs, but codec name should differentiate.
-    cmd = (f"ffprobe -show_format -v error -show_entries"
+    #
+    # To get JSON: ffprobe -v quiet -print_format json -show_format -show_streams "lolwut.mp4" > "lolwut.mp4.json"
+    # In Python search for examples or use library: https://docs.python.org/3/library/json.html
+    cmd = (f"ffprobe -pretty -show_format -v error -show_entries"
            f" stream=codec_name,width,height,duration,size,bit_rate"
            f" -of default=noprint_wrappers=1 {video_path} | grep -v 'TAG:'")
     print("\nRunning ffprobe on saved video file:") # TODO, refine info and maybe print better.
