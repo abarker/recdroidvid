@@ -237,7 +237,7 @@ def start_monitoring_and_button_push_recording(autostart_recording=True):
     # Get a snapshot of save directory before recording starts.
     before_ls = adb_ls(OPENCAMERA_SAVE_DIR, extension_whitelist=[VIDEO_FILE_EXTENSION])
 
-    if AUTO_START_RECORDING:
+    if args.recordauto:
         # Note, this was the original way to get a single video but always starts
         # recording right away and only allows one video at a time to be recorded
         # before closing scrcpy.  It still works as an error check of sorts.
@@ -400,10 +400,9 @@ def parse_command_line():
                         default=[1], help="""The number at which to start numbering videos.
                         The number is currently appended to the user-defined prefix and
                         defaults to 1.""")
-    #parser.add_argument("--inplace", action="store_true", default=False,
-    #                    help="""Modify the input code file inplace; code will be
-    #                    replaced with the stripped code.  This is the same as
-    #                    passing in the code file's name as the output file.""")
+    parser.add_argument("--recordauto", "-r", action="store_true",
+                        default=AUTO_START_RECORDING, help="""Automatically start recording
+                        when the scrcpy monitor starts up.""")
     #parser.add_argument("--to-empty", action="store_true", default=default_to_empty,
     #                    help="""Map removed code to empty strings rather than spaces.
     #                    This is easier to read, but does not preserve columns.
