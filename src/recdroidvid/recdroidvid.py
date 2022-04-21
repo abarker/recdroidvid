@@ -26,8 +26,9 @@ AUTO_START_RECORDING = False
 SCRCPY_EXTRA_COMMAND_LINE_ARGS = ""
 
 #VIDEO_PLAYER_CMD = "pl"
-VIDEO_PLAYER_CMD = f"mplayer -loop 0 -vo xv -framedrop -really-quiet -title '{'='*40} VIDEO PREVIEW {'='*40}'"
 #VIDEO_PLAYER_CMD_JACK = "pl --jack"
+BASE_VIDEO_PLAYER_CMD = f"mplayer -loop 0 -vo xv -framedrop -autosync 30 -cache 8192 -really-quiet -title '{'='*40} VIDEO PREVIEW {'='*40}'"
+VIDEO_PLAYER_CMD = BASE_VIDEO_PLAYER_CMD + " -ao sdl"
 VIDEO_PLAYER_CMD_JACK = VIDEO_PLAYER_CMD + " -ao jack"
 DETECT_JACK_PROCESS_NAMES = ["qjackctl"] # Search `ps -ef` for these to detect Jack running.
 
