@@ -26,11 +26,12 @@ AUTO_START_RECORDING = False
 SCRCPY_EXTRA_COMMAND_LINE_ARGS = ""
 
 #VIDEO_PLAYER_CMD = "pl"
-VIDEO_PLAYER_CMD = f"mplayer -loop 0 -really-quiet -title '{'='*40} VIDEO PREVIEW {'='*40}'"
+VIDEO_PLAYER_CMD = f"mplayer -loop 0 -vo xv -framedrop -really-quiet -title '{'='*40} VIDEO PREVIEW {'='*40}'"
 #VIDEO_PLAYER_CMD_JACK = "pl --jack"
 VIDEO_PLAYER_CMD_JACK = VIDEO_PLAYER_CMD + " -ao jack"
 DETECT_JACK_PROCESS_NAMES = ["qjackctl"] # Search `ps -ef` for these to detect Jack running.
 
+DATE_AND_TIME_IN_VIDEO_NAME = True
 PREVIEW_VIDEO = True
 QUERY_PREVIEW_VIDEO = False
 
@@ -57,6 +58,7 @@ import os
 from time import sleep
 import subprocess
 import argparse
+import datetime
 
 YES_ANSWERS = {"Y", "y", "yes", "YES", "Yes"}
 NO_ANSWERS = {"N", "n", "no", "NO", "No"}
@@ -381,7 +383,11 @@ def monitor_record_and_pull_videos():
         for count, vid in enumerate(video_paths):
             pulled_vid = pull_and_delete_file(vid) # Note file always written to CWD for now.
             sleep(0.3)
-            new_vid_name = f"{args.file_basename_or_prefix[0]}_{count+numbering_offset:02d}_{pulled_vid}"
+            if DATE_AND_TIME_IN_VIDEO_NAME:
+                date_time_string = datetime.datetime.now().strftime('%Y-%m-%d_%H:%M:%S_')
+            else:
+                date_time_string = ""
+            new_vid_name = f"{args.file_basename_or_prefix[0]}_{count+numbering_offset:02d}_{date_time_string}{pulled_vid}"
             print(f"\nSaving (renaming) video file as\n   {new_vid_name}")
             os.rename(pulled_vid, new_vid_name)
             new_video_paths.append(new_vid_name)
