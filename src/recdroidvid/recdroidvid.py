@@ -50,8 +50,8 @@ EXTRACTED_AUDIO_EXTENSION = ".wav"
 # The button then starts ardour and calls adb to push record button when its button is pressed.
 # Wish list: add a track marker at the spot.  Maybe xdotool could do it, calling menu item and
 # entering the text???
-START_ARDOUR_TRANSPORT = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" space'
-#START_ARDOUR_TRANSPORT = 'xdotool windowactivate "$(xdotool search --onlyvisible --class Ardour | head -1)"'
+TOGGLE_DAW_TRANSPORT_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" space'
+#TOGGLE_DAW_TRANSPORT_CMD = 'xdotool windowactivate "$(xdotool search --onlyvisible --class Ardour | head -1)"'
 RAISE_ARDOUR_TO_TOP = "xdotool search --onlyvisible --class Ardour windowactivate %@"
 
 # This option records with the ADB screenrecord command.  It is limited to
@@ -173,6 +173,36 @@ def print_startup_message():
     print(f"\nrecdroidvid, version {VERSION}")
     print(f"\n{'='*78}")
 
+def directory_size_increasing(dirname, wait_secs=1):
+    """Return true if the save directory is growing in size (i.e., file is being
+    recorded there)."""
+    first_du = adb(f"adb shell du {dirname}", return_stdout=True)
+    first_du = first_du.split("\t")[0]
+    sleep(wait_secs)
+    second_du = adb(f"adb shell du {dirname}", return_stdout=True)
+    second_du = second_du.split("\t")[0]
+    return int(second_du) > int(first_du)
+
+def toggle_daw_transport():
+    """Toggle the transport state of the DAW.  Used to sync with recording."""
+    os.system(TOGGLE_DAW_TRANSPORT_CMD)
+
+SYNC_DAW_SLEEP_TIME = 2
+
+def sync_daw_transport_when_video_recording():
+    """Start the DAW transport when video recording is detected on the Android
+    device.  Meant to be run as a thread or via multiprocessing to execute at the
+    same time as the scrcpy monitor."""
+    rolling = False
+    while True:
+        if not rolling and directory_size_increasing(OPENCAMERA_SAVE_DIR):
+            toggle_daw_transport()
+            rolling = True
+        if rolling and not directory_size_increasing(OPENCAMERA_SAVE_DIR):
+            toggle_daw_transport()
+            rolling = False
+        sleep(SYNC_DAW_SLEEP_TIME)
+
 def start_screenrecording():
     """Start screenrecording via the ADB `screenrecord` command.  This process is run
     in the background.  The PID is returned along with the video pathname."""
@@ -230,18 +260,9 @@ def start_screen_monitor(block=True):
     print("\nSYSTEM:", cmd)
     os.system(cmd)
 
-def directory_size_increasing(dirname):
-    """Return true if the save directory is growing in size (i.e., file is being
-    recorded there)."""
-    first_du = adb(f"adb shell du {dirname}", return_stdout=True)
-    first_du = first_du.split("\t")[0]
-    sleep(1)
-    second_du = adb(f"adb shell du {dirname}", return_stdout=True)
-    second_du = second_du.split("\t")[0]
-    return int(second_du) > int(first_du)
-
 def start_monitoring_and_button_push_recording(autostart_recording=True):
     """Emulate a button push to start and stop recording."""
+    SYNC_DAW_TRANSPORT = True
 
     # Get a snapshot of save directory before recording starts.
     before_ls = adb_ls(OPENCAMERA_SAVE_DIR, extension_whitelist=[VIDEO_FILE_EXTENSION])
@@ -264,10 +285,25 @@ def start_monitoring_and_button_push_recording(autostart_recording=True):
             #video_basename = new_video_files[0].split("-")[-1]
             #video_path = os.path.join(OPENCAMERA_SAVE_DIR, video_basename)
 
+    if SYNC_DAW_TRANSPORT:
+        # Better maybe, for clean end, use a stop flag and threading:
+        # https://stackoverflow.com/questions/323972/is-there-any-way-to-kill-a-thread
+        # Replace multiprocessing with threading, but add args as in above link.
+        # https://thispointer.com/python-how-to-create-a-thread-to-run-a-function-in-parallel/
+        import multiprocessing
+        proc = multiprocessing.Process(target=your_proc_function, args=())
+        proc.start()
+
     start_screen_monitor(block=True) # This blocks until the screen monitor is closed.
+
+    if SYNC_DAW_TRANSPORT:
+        sleep(SYNC_DAW_SLEEP_TIME) # Give the process time to detect any final changes.
+        proc.terminate()
 
     if directory_size_increasing(OPENCAMERA_SAVE_DIR):
         adb_tap_camera_button() # Presumably still recording; turn off the camera.
+        if SYNC_DAW_TRANSPORT:
+            toggle_daw_transport() # Presumably the DAW transport is still rolling.
         while directory_size_increasing(OPENCAMERA_SAVE_DIR):
             print("Waiting for save directory to stop increasing in size...")
             sleep(1)
