@@ -27,9 +27,15 @@ SCRCPY_EXTRA_COMMAND_LINE_ARGS = ""
 
 #VIDEO_PLAYER_CMD = "pl"
 #VIDEO_PLAYER_CMD_JACK = "pl --jack"
-BASE_VIDEO_PLAYER_CMD = f"mplayer -loop 0 -vo xv -framedrop -autosync 30 -cache 8192 -really-quiet -title '{'='*40} VIDEO PREVIEW {'='*40}'"
-VIDEO_PLAYER_CMD = BASE_VIDEO_PLAYER_CMD + " -ao sdl"
-VIDEO_PLAYER_CMD_JACK = VIDEO_PLAYER_CMD + " -ao jack"
+BASE_VIDEO_PLAYER_CMD = ["mplayer", "-loop", "0",
+                                    "-vo", "xv",
+                                    "-xy", "1080", # Set the width of displayed video.
+                                    "-geometry", "50%:70%", # Set initial position on screen.
+                                    "-framedrop", "-autosync", "30", "-cache", "8192",
+                                    "-really-quiet",
+                                    "-title", f"{'='*40} VIDEO PREVIEW {'='*40}"]
+VIDEO_PLAYER_CMD = BASE_VIDEO_PLAYER_CMD + ["-ao", "sdl"]
+VIDEO_PLAYER_CMD_JACK = VIDEO_PLAYER_CMD + ["-ao", "jack"]
 DETECT_JACK_PROCESS_NAMES = ["qjackctl"] # Search `ps -ef` for these to detect Jack running.
 
 DATE_AND_TIME_IN_VIDEO_NAME = True
@@ -45,7 +51,7 @@ EXTRACTED_AUDIO_EXTENSION = ".wav"
 # Wish list: add a track marker at the spot.  Maybe xdotool could do it, calling menu item and
 # entering the text???
 START_ARDOUR_TRANSPORT = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" space'
-START_ARDOUR_TRANSPORT = 'xdotool windowactivate "$(xdotool search --onlyvisible --class Ardour | head -1)"'
+#START_ARDOUR_TRANSPORT = 'xdotool windowactivate "$(xdotool search --onlyvisible --class Ardour | head -1)"'
 RAISE_ARDOUR_TO_TOP = "xdotool search --onlyvisible --class Ardour windowactivate %@"
 
 # This option records with the ADB screenrecord command.  It is limited to
@@ -241,21 +247,22 @@ def start_monitoring_and_button_push_recording(autostart_recording=True):
     before_ls = adb_ls(OPENCAMERA_SAVE_DIR, extension_whitelist=[VIDEO_FILE_EXTENSION])
 
     if args.recordauto:
-        # Note, this was the original way to get a single video but always starts
-        # recording right away and only allows one video at a time to be recorded
-        # before closing scrcpy.  It still works as an error check of sorts.
         adb_tap_camera_button()
         sleep(0.5)
-        after_ls = adb_ls(OPENCAMERA_SAVE_DIR, all=True, extension_whitelist=[VIDEO_FILE_EXTENSION])
-        new_video_files = [f for f in after_ls if f not in before_ls]
-        if len(new_video_files) > 1:
-            print("\nWARNING: Found multiple new files in OPENCAMERA_SAVE_DIR.", file=sys.stderr)
-        if not(new_video_files):
-            print("\nERROR: No new video files found.  Is phone connected via USB?\n", file=sys.stderr)
-        # Previously used lines below.
-        # NOTE: Below line is needed to convert `.pending...mp4` files to the final fname.
-        #video_basename = new_video_files[0].split("-")[-1]
-        #video_path = os.path.join(OPENCAMERA_SAVE_DIR, video_basename)
+        if False:
+            # Note, this was the original way to get a single video but always starts
+            # recording right away and only allows one video at a time to be recorded
+            # before closing scrcpy.  It still works as an error check of sorts.
+            after_ls = adb_ls(OPENCAMERA_SAVE_DIR, all=True, extension_whitelist=[VIDEO_FILE_EXTENSION])
+            new_video_files = [f for f in after_ls if f not in before_ls]
+            if len(new_video_files) > 1:
+                print("\nWARNING: Found multiple new files in OPENCAMERA_SAVE_DIR.", file=sys.stderr)
+            if not(new_video_files):
+                print("\nERROR: No new video files found.  Is phone connected via USB?\n", file=sys.stderr)
+            # Previously used lines below.
+            # NOTE: Below line is needed to convert `.pending...mp4` files to the final fname.
+            #video_basename = new_video_files[0].split("-")[-1]
+            #video_path = os.path.join(OPENCAMERA_SAVE_DIR, video_basename)
 
     start_screen_monitor(block=True) # This blocks until the screen monitor is closed.
 
@@ -299,12 +306,13 @@ def preview_video(video_path):
         """Run a preview of the video."""
         if detect_if_jack_running():
             print("\nDetected jack running via qjackctl.")
-            cmd = f"{VIDEO_PLAYER_CMD_JACK} {video_path}"
+            cmd = VIDEO_PLAYER_CMD_JACK + [f"{video_path}"]
         else:
             print("\nDid not detect jack running via qjackctl.")
-            cmd = f"{VIDEO_PLAYER_CMD} {video_path}"
-        print(f"\nRunning: {cmd}")
-        os.system(cmd)
+            cmd = VIDEO_PLAYER_CMD + [f"{video_path}"]
+        print(f"\nRunning:", " ".join(cmd))
+        print("DEBUG cmd is", cmd)
+        subprocess.run(cmd) # This FAILS for some reason.
 
     if QUERY_PREVIEW_VIDEO:
         preview = input("\nRun preview? ")
