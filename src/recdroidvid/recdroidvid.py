@@ -10,6 +10,14 @@ Note: Phone cannot be powered down.
 
 """
 
+# TODO: When disconnected suddenly, the program crashes after `du` commands which give
+# the warning "WARN: Device disconnected"
+
+# TODO: Maybe improve sync of the multiprocessing by having a shared var (or use
+# threading if no shared vars)
+
+# scrcpy always in center
+
 VERSION = "0.1.0"
 
 # NOTE: To find this path, look at the info from an OpenCamera video saved on the phone.
@@ -176,10 +184,11 @@ def print_startup_message():
 def directory_size_increasing(dirname, wait_secs=1):
     """Return true if the save directory is growing in size (i.e., file is being
     recorded there)."""
-    first_du = adb(f"adb shell du {dirname}", return_stdout=True)
+    DEBUG = True
+    first_du = adb(f"adb shell du {dirname}", print_cmd=DEBUG, return_stdout=True)
     first_du = first_du.split("\t")[0]
     sleep(wait_secs)
-    second_du = adb(f"adb shell du {dirname}", return_stdout=True)
+    second_du = adb(f"adb shell du {dirname}", print_cmd=DEBUG, return_stdout=True)
     second_du = second_du.split("\t")[0]
     return int(second_du) > int(first_du)
 
@@ -286,12 +295,12 @@ def start_monitoring_and_button_push_recording(autostart_recording=True):
             #video_path = os.path.join(OPENCAMERA_SAVE_DIR, video_basename)
 
     if SYNC_DAW_TRANSPORT:
-        # Better maybe, for clean end, use a stop flag and threading:
+        # Better maybe, for clean end, use a stop flag and threading:  <== or use stop flag/w multiprocessing...
         # https://stackoverflow.com/questions/323972/is-there-any-way-to-kill-a-thread
         # Replace multiprocessing with threading, but add args as in above link.
         # https://thispointer.com/python-how-to-create-a-thread-to-run-a-function-in-parallel/
         import multiprocessing
-        proc = multiprocessing.Process(target=your_proc_function, args=())
+        proc = multiprocessing.Process(target=sync_daw_transport_when_video_recording, args=())
         proc.start()
 
     start_screen_monitor(block=True) # This blocks until the screen monitor is closed.
