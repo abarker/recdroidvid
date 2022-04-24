@@ -77,6 +77,9 @@ SYNC_DAW_SLEEP_TIME = 4 # Lag between video on/off button and DAW transport sync
 # Deprecated and may be removed at some point.
 USE_SCREENRECORD = False
 
+POSTPROCESS_VIDEOS = False
+POSTPROCESSING_CMD = [] # Enter cmd as separate string arguments.
+
 import sys
 import os
 from time import sleep
@@ -414,6 +417,14 @@ def extract_audio_from_video(video_path):
     else:
         run_audio_extraction(video_path, extension=EXTRACTED_AUDIO_EXTENSION)
 
+def postprocess_video_file(video_path):
+    """Run a postprocessing algorithm on the video file at `video_path`."""
+    if not POSTPROCESS_VIDEOS or not os.path.isfile(video_path):
+        return
+    postprocess_cmd = POSTPROCESSING_CMD + [f"{video_path}"]
+    print("\nRunning:", " ".join(postprocess_cmd))
+    subprocess.run(postprocess_cmd)
+
 def print_info_about_pulled_video(video_path):
     """Print out some information about the resolution, etc., of a video."""
     # TODO: Capture output and indent at least.  Print container stuff ahead of codecs
@@ -538,6 +549,7 @@ def main():
         print_info_about_pulled_video(vid)
         preview_video(vid)
         extract_audio_from_video(vid)
+        postprocess_video_file(vid)
 
 if __name__ == "__main__":
 
