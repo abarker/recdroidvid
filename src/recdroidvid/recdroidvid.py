@@ -10,6 +10,10 @@ Note: Phone cannot be powered down.
 
 """
 
+# TODO: Terrible lag problems in recorded video.  Too high res?  Polling errors
+# due to phone load when testing Ardour sync?   TURNED OFF NOW, see it lag
+# occurs there, too.
+
 # TODO: When disconnected suddenly, the program crashes after `du` commands which give
 # the warning "WARN: Device disconnected"
 
@@ -35,15 +39,17 @@ SCRCPY_EXTRA_COMMAND_LINE_ARGS = ""
 
 #VIDEO_PLAYER_CMD = "pl"
 #VIDEO_PLAYER_CMD_JACK = "pl --jack"
-BASE_VIDEO_PLAYER_CMD = ["mplayer", "-loop", "0",
-                                    "-vo", "xv",
-                                    "-xy", "1080", # Set the width of displayed video.
-                                    "-geometry", "50%:70%", # Set initial position on screen.
-                                    "-framedrop", "-autosync", "30", "-cache", "8192",
-                                    "-really-quiet",
-                                    "-title", f"{'='*40} VIDEO PREVIEW {'='*40}"]
-VIDEO_PLAYER_CMD = BASE_VIDEO_PLAYER_CMD + ["-ao", "sdl"]
-VIDEO_PLAYER_CMD_JACK = VIDEO_PLAYER_CMD + ["-ao", "jack"]
+BASE_VIDEO_PLAYER_CMD = ["mpv", "--loop=0",
+                                "--autofit=1080", # Set the width of displayed video.
+                                "--geometry=50%:70%", # Set initial position on screen.
+                                "--autosync=30", "--cache=yes",
+                                "--osd-duration=200",
+                                "--osd-bar-h=0.5",
+                                "--really-quiet",
+                                f"--title='{'='*40} VIDEO PREVIEW {'='*40}'"]
+
+VIDEO_PLAYER_CMD = BASE_VIDEO_PLAYER_CMD + ["--ao=sdl"]
+VIDEO_PLAYER_CMD_JACK = VIDEO_PLAYER_CMD + ["--ao-jack"]
 DETECT_JACK_PROCESS_NAMES = ["qjackctl"] # Search `ps -ef` for these to detect Jack running.
 
 DATE_AND_TIME_IN_VIDEO_NAME = True
@@ -61,6 +67,9 @@ EXTRACTED_AUDIO_EXTENSION = ".wav"
 TOGGLE_DAW_TRANSPORT_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" space'
 #TOGGLE_DAW_TRANSPORT_CMD = 'xdotool windowactivate "$(xdotool search --onlyvisible --class Ardour | head -1)"'
 RAISE_ARDOUR_TO_TOP = "xdotool search --onlyvisible --class Ardour windowactivate %@"
+
+SYNC_DAW_TRANSPORT = False # Note this can increase CPU usage on computer and phone (polling).
+SYNC_DAW_SLEEP_TIME = 4 # Lag between video on/off button and DAW transport syncing (load/time tradeoff)
 
 # This option records with the ADB screenrecord command.  It is limited to
 # screen resolution(?) and 3min, no sound.
@@ -196,12 +205,14 @@ def toggle_daw_transport():
     """Toggle the transport state of the DAW.  Used to sync with recording."""
     os.system(TOGGLE_DAW_TRANSPORT_CMD)
 
-SYNC_DAW_SLEEP_TIME = 2
-
 def sync_daw_transport_when_video_recording():
     """Start the DAW transport when video recording is detected on the Android
     device.  Meant to be run as a thread or via multiprocessing to execute at the
     same time as the scrcpy monitor."""
+    # TODO: Another way to do this might be to monitor the output of
+    #     adb shell getevent -l
+    # and look for a BTN_TOUCH DOWN followed by BTN_TOUCH UP
+    # But, you'd need to continuously get the output.
     rolling = False
     while True:
         if not rolling and directory_size_increasing(OPENCAMERA_SAVE_DIR):
@@ -271,7 +282,6 @@ def start_screen_monitor(block=True):
 
 def start_monitoring_and_button_push_recording(autostart_recording=True):
     """Emulate a button push to start and stop recording."""
-    SYNC_DAW_TRANSPORT = True
 
     # Get a snapshot of save directory before recording starts.
     before_ls = adb_ls(OPENCAMERA_SAVE_DIR, extension_whitelist=[VIDEO_FILE_EXTENSION])
@@ -294,7 +304,7 @@ def start_monitoring_and_button_push_recording(autostart_recording=True):
             #video_basename = new_video_files[0].split("-")[-1]
             #video_path = os.path.join(OPENCAMERA_SAVE_DIR, video_basename)
 
-    if SYNC_DAW_TRANSPORT:
+    if args.sync_to_daw:
         # Better maybe, for clean end, use a stop flag and threading:  <== or use stop flag/w multiprocessing...
         # https://stackoverflow.com/questions/323972/is-there-any-way-to-kill-a-thread
         # Replace multiprocessing with threading, but add args as in above link.
@@ -305,13 +315,13 @@ def start_monitoring_and_button_push_recording(autostart_recording=True):
 
     start_screen_monitor(block=True) # This blocks until the screen monitor is closed.
 
-    if SYNC_DAW_TRANSPORT:
+    if args.sync_to_daw:
         sleep(SYNC_DAW_SLEEP_TIME) # Give the process time to detect any final changes.
         proc.terminate()
 
     if directory_size_increasing(OPENCAMERA_SAVE_DIR):
         adb_tap_camera_button() # Presumably still recording; turn off the camera.
-        if SYNC_DAW_TRANSPORT:
+        if args.sync_to_daw:
             toggle_daw_transport() # Presumably the DAW transport is still rolling.
         while directory_size_increasing(OPENCAMERA_SAVE_DIR):
             print("Waiting for save directory to stop increasing in size...")
@@ -466,6 +476,10 @@ def parse_command_line():
     parser.add_argument("--recordauto", "-r", action="store_true",
                         default=AUTO_START_RECORDING, help="""Automatically start recording
                         when the scrcpy monitor starts up.""")
+    parser.add_argument("--sync-to-daw", "-d", action="store_false",
+                        default=SYNC_DAW_TRANSPORT, help="""Start the DAW transport when
+                        video recording is detected on the mobile device.  May increase
+                        CPU loads on the computer and the mobile device.""")
     #parser.add_argument("--to-empty", action="store_true", default=default_to_empty,
     #                    help="""Map removed code to empty strings rather than spaces.
     #                    This is easier to read, but does not preserve columns.
