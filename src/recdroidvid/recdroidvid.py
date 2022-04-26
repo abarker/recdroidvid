@@ -229,7 +229,7 @@ def sync_daw_transport_when_video_recording():
 def start_screenrecording():
     """Start screenrecording via the ADB `screenrecord` command.  This process is run
     in the background.  The PID is returned along with the video pathname."""
-    video_out_basename = args.file_basename_or_prefix[0]
+    video_out_basename = args.video_file_prefix[0]
     video_out_pathname =  os.path.join(args.camera_save_dir[0], f"{video_out_basename}.mp4")
     tmp_pid_path = f"zzzz_screenrecord_pid_tmp"
     adb_ls(os.path.dirname(video_out_pathname)) # DOESNT DO ANYTHING?? DEBUG?? TODO
@@ -462,7 +462,7 @@ def monitor_record_and_pull_videos():
                 date_time_string = datetime.datetime.now().strftime('%Y-%m-%d_%H:%M:%S_')
             else:
                 date_time_string = ""
-            new_vid_name = f"{args.file_basename_or_prefix[0]}_{count+numbering_offset:02d}_{date_time_string}{pulled_vid}"
+            new_vid_name = f"{args.video_file_prefix[0]}_{count+numbering_offset:02d}_{date_time_string}{pulled_vid}"
             print(f"\nSaving (renaming) video file as\n   {new_vid_name}")
             os.rename(pulled_vid, new_vid_name)
             new_video_paths.append(new_vid_name)
@@ -474,10 +474,10 @@ def parse_command_line():
     parser = argparse.ArgumentParser(
                     description="Record a video on mobile via ADB and pull result.")
 
-    parser.add_argument("file_basename_or_prefix", type=str, nargs=1, metavar="file_basename_or_prefix",
-                        default=None, help="The basename or prefix of the pulled video file."
+    parser.add_argument("video_file_prefix", type=str, nargs="?", metavar="PREFIXSTRING",
+                        default=["rdv"], help="The basename or prefix of the pulled video file."
                         " Whether name or prefix depends on the method used to record.")
-    parser.add_argument("--scrcpy-args", "-s", type=str, nargs=1, metavar="STRING-OF-ARGS",
+    parser.add_argument("--scrcpy-args", "-y", type=str, nargs=1, metavar="STRING-OF-ARGS",
                         default=[""], help="""An optional string of extra arguments to pass
                         directly to the `scrcpy` program.""")
     parser.add_argument("--numbering-start", "-n", type=int, nargs=1, metavar="INTEGER",
@@ -498,51 +498,12 @@ def parse_command_line():
                         default=OPENCAMERA_SAVE_DIR, help="""The directory on the remote
                         device where the camera app saves videos.  Record a video and look
                         at the information about the video to find the path.   Defaults
-                        to the OpenCamera default save directory."""
+                        to the OpenCamera default save directory.""")
     parser.add_argument("--camera-package-name", "-c", type=str, nargs=1, metavar="PACKAGENAME",
                         default=OPENCAMERA_PACKAGE_NAME, help="""The Android package name of
                         the camera app.  Defaults to "net.sourceforge.opencamera", the
                         OpenCamera package name.  Look in the URL of the app's PlayStore
-                        web site to find this string."""
-    #parser.add_argument("--to-empty", action="store_true", default=default_to_empty,
-    #                    help="""Map removed code to empty strings rather than spaces.
-    #                    This is easier to read, but does not preserve columns.
-    #                    Default is false.""")
-    #parser.add_argument("--strip-nl", action="store_true", default=default_strip_nl,
-    #                    help="""Also strip non-logical newline tokens inside type
-    #                    hints.  These occur, for example, when a type-hint
-    #                    function like `List` in a function parameter list has
-    #                    line breaks inside its own arguments list.  The default
-    #                    is to keep the newline tokens in order to preserve line
-    #                    numbers between the stripped and non-stripped files.
-    #                    Selecting this option no longer guarantees a direct
-    #                    correspondence.""")
-    #parser.add_argument("--no-ast", action="store_true", default=default_no_ast,
-    #                    help="""Do not parse the resulting code with the Python `ast`
-    #                    module to check it.  Default is false.""")
-    #parser.add_argument("--no-colon-move", action="store_true", default=default_no_colon_move,
-    #                    help="""Do not move colons to fix line breaks that occur in the
-    #                    hints for the function return type.  Default is false.""")
-    #parser.add_argument("--no-equal-move", action="store_true", default=default_no_equal_move,
-    #                    help="""Do not move the assignment with `=` when needed to
-    #                    fix annotated assignments that include newlines in the
-    #                    type hints.  When they are moved the total number of
-    #                    lines is kept the same in order to preserve line number
-    #                    correspondence between the stripped and non-stripped
-    #                    files.  If this option is selected and such a situation
-    #                    occurs an exception is raised.""")
-    #parser.add_argument("--only-assigns-and-defs", action="store_true",
-    #                    default=default_only_assigns_and_defs,
-    #                    help="""Only strip annotated assignments and standalone type
-    #                    definitions, keeping function signature annotations.
-    #                    Python 3.5 and earlier do not implement these; they
-    #                    first appeared in Python 3.6.  The default is false.""")
-    #parser.add_argument("--only-test-for-changes", action="store_true",
-    #                    default=default_only_test_for_changes, help="""
-    #                    Only test if any changes would be made.  If any
-    #                    stripping would be done then it prints `True` and
-    #                    exits with code 0.  Otherwise it prints `False` and
-    #                    exits with code 1.""")
+                        web site to find this string.""")
 
     cmdline_args = parser.parse_args()
     return cmdline_args
