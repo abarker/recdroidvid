@@ -45,19 +45,19 @@ BASE_VIDEO_PLAYER_CMD = ["mpv", "--loop=0",
                                 "--autosync=30", "--cache=yes",
                                 "--osd-duration=200",
                                 "--osd-bar-h=0.5",
-                                "--really-quiet",
+                                #"--really-quiet",  # Turn off when debugged; masks errors.
                                 f"--title='{'='*40} VIDEO PREVIEW {'='*40}'"]
 
 VIDEO_PLAYER_CMD = BASE_VIDEO_PLAYER_CMD + ["--ao=sdl"]
-VIDEO_PLAYER_CMD_JACK = VIDEO_PLAYER_CMD + ["--ao-jack"]
+VIDEO_PLAYER_CMD_JACK = VIDEO_PLAYER_CMD + ["--ao=jack"]
 DETECT_JACK_PROCESS_NAMES = ["qjackctl"] # Search `ps -ef` for these to detect Jack running.
 
 DATE_AND_TIME_IN_VIDEO_NAME = True
 PREVIEW_VIDEO = True
 QUERY_PREVIEW_VIDEO = False
 
-AUDIO_EXTRACT = True # Whether to ever extract a AUDIO file from the video.
-QUERY_AUDIO_EXTRACT = False # Ask before extracting AUDIO file.
+EXTRACT_AUDIO = False # Whether to ever extract a AUDIO file from the video.
+QUERY_EXTRACT_AUDIO = False # Ask before extracting AUDIO file.
 EXTRACTED_AUDIO_EXTENSION = ".wav"
 
 # TODO: Now, need to run a BG process that starts a popup always-on-top with a single toggle button.
@@ -184,7 +184,7 @@ def open_video_camera():
     # This command seems to avoid opening in a menu, etc., for now....
     # https://android.stackexchange.com/questions/171490/start-application-from-adb
     # https://stackoverflow.com/questions/4567904/how-to-start-an-application-using-android-adb-tools
-    adb(f"adb shell am start -W -n {OPENCAMERA_PACKAGE_NAME}/.MainActivity --ei android.intent.extras.CAMERA_FACING 0")
+    adb(f"adb shell am start -W -n {args.camera_package_name[0]}/.MainActivity --ei android.intent.extras.CAMERA_FACING 0")
     sleep(1)
 
 def print_startup_message():
@@ -218,10 +218,10 @@ def sync_daw_transport_when_video_recording():
     # But, you'd need to continuously get the output.
     rolling = False
     while True:
-        if not rolling and directory_size_increasing(OPENCAMERA_SAVE_DIR):
+        if not rolling and directory_size_increasing(args.camera_save_dir[0]):
             toggle_daw_transport()
             rolling = True
-        if rolling and not directory_size_increasing(OPENCAMERA_SAVE_DIR):
+        if rolling and not directory_size_increasing(args.camera_save_dir[0]):
             toggle_daw_transport()
             rolling = False
         sleep(SYNC_DAW_SLEEP_TIME)
@@ -230,7 +230,7 @@ def start_screenrecording():
     """Start screenrecording via the ADB `screenrecord` command.  This process is run
     in the background.  The PID is returned along with the video pathname."""
     video_out_basename = args.file_basename_or_prefix[0]
-    video_out_pathname =  os.path.join(OPENCAMERA_SAVE_DIR, f"{video_out_basename}.mp4")
+    video_out_pathname =  os.path.join(args.camera_save_dir[0], f"{video_out_basename}.mp4")
     tmp_pid_path = f"zzzz_screenrecord_pid_tmp"
     adb_ls(os.path.dirname(video_out_pathname)) # DOESNT DO ANYTHING?? DEBUG?? TODO
 
@@ -287,7 +287,7 @@ def start_monitoring_and_button_push_recording(autostart_recording=True):
     """Emulate a button push to start and stop recording."""
 
     # Get a snapshot of save directory before recording starts.
-    before_ls = adb_ls(OPENCAMERA_SAVE_DIR, extension_whitelist=[VIDEO_FILE_EXTENSION])
+    before_ls = adb_ls(args.camera_save_dir[0], extension_whitelist=[VIDEO_FILE_EXTENSION])
 
     if args.recordauto:
         adb_tap_camera_button()
@@ -296,16 +296,16 @@ def start_monitoring_and_button_push_recording(autostart_recording=True):
             # Note, this was the original way to get a single video but always starts
             # recording right away and only allows one video at a time to be recorded
             # before closing scrcpy.  It still works as an error check of sorts.
-            after_ls = adb_ls(OPENCAMERA_SAVE_DIR, all=True, extension_whitelist=[VIDEO_FILE_EXTENSION])
+            after_ls = adb_ls(args.camera_save_dir[0], all=True, extension_whitelist=[VIDEO_FILE_EXTENSION])
             new_video_files = [f for f in after_ls if f not in before_ls]
             if len(new_video_files) > 1:
-                print("\nWARNING: Found multiple new files in OPENCAMERA_SAVE_DIR.", file=sys.stderr)
+                print("\nWARNING: Found multiple new files in args.camera_save_dir[0].", file=sys.stderr)
             if not(new_video_files):
                 print("\nERROR: No new video files found.  Is phone connected via USB?\n", file=sys.stderr)
             # Previously used lines below.
             # NOTE: Below line is needed to convert `.pending...mp4` files to the final fname.
             #video_basename = new_video_files[0].split("-")[-1]
-            #video_path = os.path.join(OPENCAMERA_SAVE_DIR, video_basename)
+            #video_path = os.path.join(args.camera_save_dir[0], video_basename)
 
     if args.sync_to_daw:
         # Better maybe, for clean end, use a stop flag and threading:  <== or use stop flag/w multiprocessing...
@@ -322,19 +322,19 @@ def start_monitoring_and_button_push_recording(autostart_recording=True):
         sleep(SYNC_DAW_SLEEP_TIME) # Give the process time to detect any final changes.
         proc.terminate()
 
-    if directory_size_increasing(OPENCAMERA_SAVE_DIR):
+    if directory_size_increasing(args.camera_save_dir[0]):
         adb_tap_camera_button() # Presumably still recording; turn off the camera.
         if args.sync_to_daw:
             toggle_daw_transport() # Presumably the DAW transport is still rolling.
-        while directory_size_increasing(OPENCAMERA_SAVE_DIR):
+        while directory_size_increasing(args.camera_save_dir[0]):
             print("Waiting for save directory to stop increasing in size...")
             sleep(1)
 
     # Get a final snapshot of save directory after recording is finished.
-    after_ls = adb_ls(OPENCAMERA_SAVE_DIR, extension_whitelist=[VIDEO_FILE_EXTENSION])
+    after_ls = adb_ls(args.camera_save_dir[0], extension_whitelist=[VIDEO_FILE_EXTENSION])
 
     new_video_files = [f for f in after_ls if f not in before_ls]
-    new_video_paths = [os.path.join(OPENCAMERA_SAVE_DIR, v) for v in new_video_files]
+    new_video_paths = [os.path.join(args.camera_save_dir[0], v) for v in new_video_files]
     return new_video_paths
 
 def kill_pid(pid):
@@ -395,7 +395,7 @@ def detect_if_jack_running():
 def extract_audio_from_video(video_path):
     """Extract the audio from a video file, of the type with the given extension."""
     # Note screen recording doesn't have audio, only the "button" method.
-    if not ((AUDIO_EXTRACT or QUERY_AUDIO_EXTRACT) and os.path.isfile(video_path)
+    if not ((args.audio_extract or QUERY_EXTRACT_AUDIO) and os.path.isfile(video_path)
                                                    and not USE_SCREENRECORD):
         return
 
@@ -410,7 +410,7 @@ def extract_audio_from_video(video_path):
         os.system(cmd)
         print("\nAudio extracted.")
 
-    if QUERY_AUDIO_EXTRACT:
+    if QUERY_EXTRACT_AUDIO:
         extract_audio = input("\nExtract audio from video? ")
         if extract_audio.strip() in YES_ANSWERS:
             run_audio_extraction(video_path, extension=EXTRACTED_AUDIO_EXTENSION)
@@ -487,10 +487,23 @@ def parse_command_line():
     parser.add_argument("--recordauto", "-r", action="store_true",
                         default=AUTO_START_RECORDING, help="""Automatically start recording
                         when the scrcpy monitor starts up.""")
-    parser.add_argument("--sync-to-daw", "-d", action="store_false",
+    parser.add_argument("--sync-to-daw", "-s", action="store_true",
                         default=SYNC_DAW_TRANSPORT, help="""Start the DAW transport when
                         video recording is detected on the mobile device.  May increase
                         CPU loads on the computer and the mobile device.""")
+    parser.add_argument("--audio-extract", "-a", action="store_true",
+                        default=EXTRACT_AUDIO, help="""Extract a separate audio file from
+                        each video.""")
+    parser.add_argument("--camera-save-dir", "-d", type=str, nargs=1, metavar="DIRPATH",
+                        default=OPENCAMERA_SAVE_DIR, help="""The directory on the remote
+                        device where the camera app saves videos.  Record a video and look
+                        at the information about the video to find the path.   Defaults
+                        to the OpenCamera default save directory."""
+    parser.add_argument("--camera-package-name", "-c", type=str, nargs=1, metavar="PACKAGENAME",
+                        default=OPENCAMERA_PACKAGE_NAME, help="""The Android package name of
+                        the camera app.  Defaults to "net.sourceforge.opencamera", the
+                        OpenCamera package name.  Look in the URL of the app's PlayStore
+                        web site to find this string."""
     #parser.add_argument("--to-empty", action="store_true", default=default_to_empty,
     #                    help="""Map removed code to empty strings rather than spaces.
     #                    This is easier to read, but does not preserve columns.
