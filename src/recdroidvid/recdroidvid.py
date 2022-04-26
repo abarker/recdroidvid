@@ -10,11 +10,6 @@ Note: Phone cannot be powered down.
 
 """
 
-# TODO:::: Do we really have TWO numbers to keep track of????   Each video is
-# like 001.020 where you are incrementing over both invocations of scrcpy AND
-# the individual pulls (stops and starts) associated with each invocation???
-# Need to document and update the numbering.
-
 # TODO: Maybe improve sync of the multiprocessing by having a shared var (or use
 # threading if no shared vars)
 
@@ -88,6 +83,26 @@ import datetime
 
 YES_ANSWERS = {"Y", "y", "yes", "YES", "Yes"}
 NO_ANSWERS = {"N", "n", "no", "NO", "No"}
+
+#
+# Simple utility functions.
+#
+
+def query_yes_no(query_string):
+    """Query the user for a yes or no response."""
+    yes_answers = {"y", "Y", "yes", "Yes"}
+    no_answers = {"n", "N", "no", "No", "q", "Q", "quit", "Quit"}
+
+    answer = False
+    while True:
+        response = input(query_string)
+        response = response.strip()
+        if not (response in yes_answers or response in no_answers):
+            continue
+        if response in yes_answers:
+            answer = True
+        break
+    return answer
 
 #
 # Android ADB commands.
@@ -428,6 +443,15 @@ def start_monitoring_and_button_push_recording():
     new_video_paths = [os.path.join(args.camera_save_dir[0], v) for v in new_video_files]
     return new_video_paths
 
+def generate_video_name(video_number, pulled_vid_name):
+    """Generate the name to rename a pulled video to."""
+    if DATE_AND_TIME_IN_VIDEO_NAME:
+        date_time_string = datetime.datetime.now().strftime('%Y-%m-%d_%H:%M:%S_')
+    else:
+        date_time_string = ""
+    new_vid_name = f"{args.video_file_prefix[0]}_{video_number:02d}_{date_time_string}{pulled_vid_name}"
+    return new_vid_name
+
 def monitor_record_and_pull_videos(video_start_number):
     """Record a video on the Android device and pull the resulting file."""
     if USE_SCREENRECORD:
@@ -441,15 +465,10 @@ def monitor_record_and_pull_videos(video_start_number):
         video_paths = start_monitoring_and_button_push_recording()
         new_video_paths = []
         sleep(5) # Make sure video files have time to finish writing and close.
-        # TODO: Separate out the video naming to a function.
         for count, vid in enumerate(video_paths):
             pulled_vid = pull_and_delete_file(vid) # Note file always written to CWD for now.
             sleep(0.3)
-            if DATE_AND_TIME_IN_VIDEO_NAME:
-                date_time_string = datetime.datetime.now().strftime('%Y-%m-%d_%H:%M:%S_')
-            else:
-                date_time_string = ""
-            new_vid_name = f"{args.video_file_prefix[0]}_{count+video_start_number:02d}_{date_time_string}{pulled_vid}"
+            new_vid_name = generate_video_name(count+video_start_number, pulled_vid)
             print(f"\nSaving (renaming) video file as\n   {new_vid_name}")
             os.rename(pulled_vid, new_vid_name)
             new_video_paths.append(new_vid_name)
@@ -546,7 +565,7 @@ def print_info_about_pulled_video(video_path):
     os.system(cmd)
 
 #
-# Main.
+# High-level functions.
 #
 
 def startup_device_and_run(video_start_number):
@@ -585,22 +604,6 @@ def main():
             cont = query_yes_no(f"\nFinished recdroidvid loop {count}, continue? [ynq]: ")
             if not cont:
                 break
-
-def query_yes_no(query_string):
-    """Query the user for a yes or no response."""
-    yes_answers = {"y", "Y", "yes", "Yes"}
-    no_answers = {"n", "N", "no", "No", "q", "Q", "quit", "Quit"}
-
-    answer = False
-    while True:
-        response = input(query_string)
-        response = response.strip()
-        if not (response in yes_answers or response in no_answers):
-            continue
-        if response in yes_answers:
-            answer = True
-        break
-    return answer
 
 if __name__ == "__main__":
 
