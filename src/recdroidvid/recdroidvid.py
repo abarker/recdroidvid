@@ -10,17 +10,15 @@ Note: Phone cannot be powered down.
 
 """
 
-# TODO: Terrible lag problems in recorded video.  Too high res?  Polling errors
-# due to phone load when testing Ardour sync?   TURNED OFF NOW, see it lag
-# occurs there, too.
-
-# TODO: When disconnected suddenly, the program crashes after `du` commands which give
-# the warning "WARN: Device disconnected"
+# TODO:::: Do we really have TWO numbers to keep track of????   Each video is
+# like 001.020 where you are incrementing over both invocations of scrcpy AND
+# the individual pulls (stops and starts) associated with each invocation???
+# Need to document and update the numbering.
 
 # TODO: Maybe improve sync of the multiprocessing by having a shared var (or use
 # threading if no shared vars)
 
-# scrcpy always in center
+# TODO: scrcpy always in center
 
 VERSION = "0.1.0"
 
@@ -35,7 +33,8 @@ AUTO_START_RECORDING = False
 # the command line.  Some useful ones: --always-on-top --max-size=1200
 # --rotation=0 --lock-video-orientation=initial --stay-awake
 # --disable-screensaver --display-buffer=50
-SCRCPY_EXTRA_COMMAND_LINE_ARGS = ""
+SCRCPY_EXTRA_COMMAND_LINE_ARGS = ("--stay-awake --disable-screensaver --display-buffer=50 "
+                                  "--power-off-on-close --window-y=440 --window-height=540 ")
 
 #VIDEO_PLAYER_CMD = "pl"
 #VIDEO_PLAYER_CMD_JACK = "pl --jack"
@@ -89,6 +88,10 @@ import datetime
 
 YES_ANSWERS = {"Y", "y", "yes", "YES", "Yes"}
 NO_ANSWERS = {"N", "n", "no", "NO", "No"}
+
+#
+# Android ADB commands.
+#
 
 def adb(cmd, print_cmd=True, return_stdout=False, return_stderr=False):
     """Run the ADB command, printing out diagnostics.  Setting `return_output`
@@ -149,15 +152,13 @@ def adb_tap_camera_button():
     """Tap the button in the camera to start it or stop it from recording."""
     adb(f"adb shell input keyevent 27")
 
-def ls_diff(ls1, ls2):
-    """Return the list of new files in ls2 that were not present in ls1."""
-
 def adb_toggle_power():
-    """Toggle the power.  See also the `wakeup_device` function."""
+    """Toggle the power.  See also the `adb_device_wakeup` function."""
     adb("adb shell input keyevent KEYCODE_POWER")
 
-def wakeup_device():
-    """Unlock the screen without password."""
+def adb_device_wakeup():
+    """Issue an ADB wakeup command."""
+    # TODO: Maybe consolidate code with corresponding sleep command.
     output = adb(f"adb shell input keyevent KEYCODE_WAKEUP", return_stderr=True)
     if output.strip():
         print(output)
@@ -166,12 +167,24 @@ def wakeup_device():
         sys.exit(1)
     sleep(2)
 
-def unlock_screen():
+def adb_device_sleep():
+    """Issue an ADB sleep command."""
+    output = adb(f"adb shell input keyevent KEYCODE_SLEEP", return_stderr=True)
+    if output.strip():
+        print(output)
+    if output.startswith("error: no devices"):
+        print("ERROR: No devices found, is the phone plugged in via USB?", file=sys.stderr)
+        sys.exit(1)
+    sleep(2)
+
+def adb_unlock_screen():
     """Swipes screen up, assuming no passcode."""
-    adb(f"adb shell input keyevent 82 && adb shell input keyevent 66")
+    # Note 82 is the menu key.
+    #adb(f"adb shell input keyevent 82 && adb shell input keyevent 66")
+    adb(f"adb shell input keyevent 82")
     sleep(1)
 
-def open_video_camera():
+def adb_open_video_camera():
     """Open the video camera, rear facing."""
     # Note that the -W option waits for the launch to complete.
 
@@ -187,22 +200,96 @@ def open_video_camera():
     adb(f"adb shell am start -W -n {args.camera_package_name[0]}/.MainActivity --ei android.intent.extras.CAMERA_FACING 0")
     sleep(1)
 
-def print_startup_message():
-    """Print out the initial greeting message."""
-    print(f"{'='*78}")
-    print(f"\nrecdroidvid, version {VERSION}")
-    print(f"\n{'='*78}")
-
-def directory_size_increasing(dirname, wait_secs=1):
+def adb_directory_size_increasing(dirname, wait_secs=1):
     """Return true if the save directory is growing in size (i.e., file is being
     recorded there)."""
-    DEBUG = True
+    DEBUG = False # Print commands to screen when debugging.
     first_du = adb(f"adb shell du {dirname}", print_cmd=DEBUG, return_stdout=True)
     first_du = first_du.split("\t")[0]
     sleep(wait_secs)
     second_du = adb(f"adb shell du {dirname}", print_cmd=DEBUG, return_stdout=True)
     second_du = second_du.split("\t")[0]
     return int(second_du) > int(first_du)
+
+#
+# Local machine startup functions.
+#
+
+def parse_command_line():
+    """Create and return the argparse object to read the command line."""
+
+    parser = argparse.ArgumentParser(
+                    description="Record a video on mobile via ADB and pull result.")
+
+    parser.add_argument("video_file_prefix", type=str, nargs="?", metavar="PREFIXSTRING",
+                        default=["rdv"], help="""The basename or prefix of the pulled video
+                        file.  Whether name or prefix depends on the method used to
+                        record.""")
+
+    parser.add_argument("--scrcpy-args", "-y", type=str, nargs=1, metavar="STRING-OF-ARGS",
+                        default=[""], help="""An optional string of extra arguments to pass
+                        directly to the `scrcpy` program.""")
+
+    parser.add_argument("--numbering-start", "-n", type=int, nargs=1, metavar="INTEGER",
+                        default=[1], help="""The number at which to start numbering
+                        pulled videos.  The number is currently appended to the user-defined
+                        prefix and defaults to 1.""")
+
+    parser.add_argument("--loop", "-l", action="store_true",
+                        default=False, help="""Loop the recording, querying between
+                        invocations of `scrcpy` as to whether or not to continue.
+                        Video numbering (as included in the filename) is incremented
+                        on each loop.""")
+
+    parser.add_argument("--autorecord", "-r", action="store_true",
+                        default=AUTO_START_RECORDING, help="""Automatically start recording
+                        when the scrcpy monitor starts up.""")
+
+    parser.add_argument("--sync-to-daw", "-s", action="store_true",
+                        default=SYNC_DAW_TRANSPORT, help="""Start the DAW transport when
+                        video recording is detected on the mobile device.  May increase
+                        CPU loads on the computer and the mobile device.""")
+
+    parser.add_argument("--audio-extract", "-a", action="store_true",
+                        default=EXTRACT_AUDIO, help="""Extract a separate audio file from
+                        each video.""")
+
+    parser.add_argument("--camera-save-dir", "-d", type=str, nargs=1, metavar="DIRPATH",
+                        default=[OPENCAMERA_SAVE_DIR], help="""The directory on the remote
+                        device where the camera app saves videos.  Record a video and look
+                        at the information about the video to find the path.   Defaults
+                        to the OpenCamera default save directory.""")
+
+    parser.add_argument("--camera-package-name", "-c", type=str, nargs=1, metavar="PACKAGENAME",
+                        default=[OPENCAMERA_PACKAGE_NAME], help="""The Android package name of
+                        the camera app.  Defaults to "net.sourceforge.opencamera", the
+                        OpenCamera package name.  Look in the URL of the app's PlayStore
+                        web site to find this string.""")
+
+    cmdline_args = parser.parse_args()
+    return cmdline_args
+
+def print_startup_message():
+    """Print out the initial greeting message."""
+    print(f"{'='*78}")
+    print(f"\nrecdroidvid, version {VERSION}")
+    print(f"\n{'='*78}")
+
+def detect_if_jack_running():
+    """Determine if the Jack audio system is currently running; return true if it is."""
+    ps_output = subprocess.check_output(["ps", "-ef"])
+    ps_output = ps_output.decode("utf-8")
+    ps_output = ps_output.splitlines()
+    for p in ps_output:
+        #print(p)
+        for pname in DETECT_JACK_PROCESS_NAMES:
+            if pname in p:
+                return True
+    return False
+
+#
+# Functions for syncing with DAW.
+#
 
 def toggle_daw_transport():
     """Toggle the transport state of the DAW.  Used to sync with recording."""
@@ -218,13 +305,17 @@ def sync_daw_transport_when_video_recording():
     # But, you'd need to continuously get the output.
     rolling = False
     while True:
-        if not rolling and directory_size_increasing(args.camera_save_dir[0]):
+        if not rolling and adb_directory_size_increasing(args.camera_save_dir[0]):
             toggle_daw_transport()
             rolling = True
-        if rolling and not directory_size_increasing(args.camera_save_dir[0]):
+        if rolling and not adb_directory_size_increasing(args.camera_save_dir[0]):
             toggle_daw_transport()
             rolling = False
         sleep(SYNC_DAW_SLEEP_TIME)
+
+#
+# Recording and monitoring functions.
+#
 
 def start_screenrecording():
     """Start screenrecording via the ADB `screenrecord` command.  This process is run
@@ -283,13 +374,13 @@ def start_screen_monitor(block=True):
     print("\nSYSTEM:", cmd)
     os.system(cmd)
 
-def start_monitoring_and_button_push_recording(autostart_recording=True):
+def start_monitoring_and_button_push_recording():
     """Emulate a button push to start and stop recording."""
 
     # Get a snapshot of save directory before recording starts.
     before_ls = adb_ls(args.camera_save_dir[0], extension_whitelist=[VIDEO_FILE_EXTENSION])
 
-    if args.recordauto:
+    if args.autorecord:
         adb_tap_camera_button()
         sleep(0.5)
         if False:
@@ -322,11 +413,11 @@ def start_monitoring_and_button_push_recording(autostart_recording=True):
         sleep(SYNC_DAW_SLEEP_TIME) # Give the process time to detect any final changes.
         proc.terminate()
 
-    if directory_size_increasing(args.camera_save_dir[0]):
+    if adb_directory_size_increasing(args.camera_save_dir[0]):
         adb_tap_camera_button() # Presumably still recording; turn off the camera.
         if args.sync_to_daw:
             toggle_daw_transport() # Presumably the DAW transport is still rolling.
-        while directory_size_increasing(args.camera_save_dir[0]):
+        while adb_directory_size_increasing(args.camera_save_dir[0]):
             print("Waiting for save directory to stop increasing in size...")
             sleep(1)
 
@@ -337,10 +428,36 @@ def start_monitoring_and_button_push_recording(autostart_recording=True):
     new_video_paths = [os.path.join(args.camera_save_dir[0], v) for v in new_video_files]
     return new_video_paths
 
-def kill_pid(pid):
-    """Issue a kill command to a PID on the local machine (not the Android device
-    directly)."""
-    os.system(f"kill {pid}")
+def monitor_record_and_pull_videos(video_start_number):
+    """Record a video on the Android device and pull the resulting file."""
+    if USE_SCREENRECORD:
+        recorder_pid, video_path = start_screenrecording(args)
+        start_screen_monitor(block=True)
+        os.system(f"kill {recorder_pid}")
+        video_path = pull_and_delete_file(video_path) # TODO: does this work with preview??? Haven't tested...
+        return [video_path]
+
+    else: # Use the method requiring a button push on phone, emulated or actual.
+        video_paths = start_monitoring_and_button_push_recording()
+        new_video_paths = []
+        sleep(5) # Make sure video files have time to finish writing and close.
+        # TODO: Separate out the video naming to a function.
+        for count, vid in enumerate(video_paths):
+            pulled_vid = pull_and_delete_file(vid) # Note file always written to CWD for now.
+            sleep(0.3)
+            if DATE_AND_TIME_IN_VIDEO_NAME:
+                date_time_string = datetime.datetime.now().strftime('%Y-%m-%d_%H:%M:%S_')
+            else:
+                date_time_string = ""
+            new_vid_name = f"{args.video_file_prefix[0]}_{count+video_start_number:02d}_{date_time_string}{pulled_vid}"
+            print(f"\nSaving (renaming) video file as\n   {new_vid_name}")
+            os.rename(pulled_vid, new_vid_name)
+            new_video_paths.append(new_vid_name)
+        return new_video_paths
+
+#
+# Video postprocessing functions.
+#
 
 def pull_and_delete_file(pathname):
     """Pull the file at the pathname and delete the remote file.  Returns the
@@ -369,7 +486,6 @@ def preview_video(video_path):
             print("\nDid not detect jack running via qjackctl.")
             cmd = VIDEO_PLAYER_CMD + [f"{video_path}"]
         print(f"\nRunning:", " ".join(cmd))
-        print("DEBUG cmd is", cmd)
         subprocess.run(cmd) # This FAILS for some reason.
 
     if QUERY_PREVIEW_VIDEO:
@@ -379,18 +495,6 @@ def preview_video(video_path):
     else:
         print("\nRunning preview...")
         run_preview(video_path)
-
-def detect_if_jack_running():
-    """Determine if the Jack audio system is currently running; return true if it is."""
-    ps_output = subprocess.check_output(["ps", "-ef"])
-    ps_output = ps_output.decode("utf-8")
-    ps_output = ps_output.splitlines()
-    for p in ps_output:
-        #print(p)
-        for pname in DETECT_JACK_PROCESS_NAMES:
-            if pname in p:
-                return True
-    return False
 
 def extract_audio_from_video(video_path):
     """Extract the audio from a video file, of the type with the given extension."""
@@ -441,82 +545,21 @@ def print_info_about_pulled_video(video_path):
     print("\nRunning ffprobe on saved video file:") # TODO, refine info and maybe print better.
     os.system(cmd)
 
-def monitor_record_and_pull_videos():
-    """Record a video on the Android device and pull the resulting file."""
-    if USE_SCREENRECORD:
-        recorder_pid, video_path = start_screenrecording(args)
-        start_screen_monitor(block=True)
-        kill_pid(recorder_pid)
-        video_path = pull_and_delete_file(video_path) # TODO: does this work with preview??? Haven't tested...
-        return [video_path]
+#
+# Main.
+#
 
-    else: # Use the method requiring a button push on phone, emulated or actual.
-        video_paths = start_monitoring_and_button_push_recording()
-        new_video_paths = []
-        sleep(5) # Make sure video files have time to finish writing and close.
-        numbering_offset = args.numbering_start[0]
-        for count, vid in enumerate(video_paths):
-            pulled_vid = pull_and_delete_file(vid) # Note file always written to CWD for now.
-            sleep(0.3)
-            if DATE_AND_TIME_IN_VIDEO_NAME:
-                date_time_string = datetime.datetime.now().strftime('%Y-%m-%d_%H:%M:%S_')
-            else:
-                date_time_string = ""
-            new_vid_name = f"{args.video_file_prefix[0]}_{count+numbering_offset:02d}_{date_time_string}{pulled_vid}"
-            print(f"\nSaving (renaming) video file as\n   {new_vid_name}")
-            os.rename(pulled_vid, new_vid_name)
-            new_video_paths.append(new_vid_name)
-        return new_video_paths
-
-def parse_command_line():
-    """Create and return the argparse object to read the command line."""
-
-    parser = argparse.ArgumentParser(
-                    description="Record a video on mobile via ADB and pull result.")
-
-    parser.add_argument("video_file_prefix", type=str, nargs="?", metavar="PREFIXSTRING",
-                        default=["rdv"], help="The basename or prefix of the pulled video file."
-                        " Whether name or prefix depends on the method used to record.")
-    parser.add_argument("--scrcpy-args", "-y", type=str, nargs=1, metavar="STRING-OF-ARGS",
-                        default=[""], help="""An optional string of extra arguments to pass
-                        directly to the `scrcpy` program.""")
-    parser.add_argument("--numbering-start", "-n", type=int, nargs=1, metavar="INTEGER",
-                        default=[1], help="""The number at which to start numbering videos.
-                        The number is currently appended to the user-defined prefix and
-                        defaults to 1.""")
-    parser.add_argument("--recordauto", "-r", action="store_true",
-                        default=AUTO_START_RECORDING, help="""Automatically start recording
-                        when the scrcpy monitor starts up.""")
-    parser.add_argument("--sync-to-daw", "-s", action="store_true",
-                        default=SYNC_DAW_TRANSPORT, help="""Start the DAW transport when
-                        video recording is detected on the mobile device.  May increase
-                        CPU loads on the computer and the mobile device.""")
-    parser.add_argument("--audio-extract", "-a", action="store_true",
-                        default=EXTRACT_AUDIO, help="""Extract a separate audio file from
-                        each video.""")
-    parser.add_argument("--camera-save-dir", "-d", type=str, nargs=1, metavar="DIRPATH",
-                        default=OPENCAMERA_SAVE_DIR, help="""The directory on the remote
-                        device where the camera app saves videos.  Record a video and look
-                        at the information about the video to find the path.   Defaults
-                        to the OpenCamera default save directory.""")
-    parser.add_argument("--camera-package-name", "-c", type=str, nargs=1, metavar="PACKAGENAME",
-                        default=OPENCAMERA_PACKAGE_NAME, help="""The Android package name of
-                        the camera app.  Defaults to "net.sourceforge.opencamera", the
-                        OpenCamera package name.  Look in the URL of the app's PlayStore
-                        web site to find this string.""")
-
-    cmdline_args = parser.parse_args()
-    return cmdline_args
-
-def main():
+def main(video_start_number):
     """Main script functionality."""
+    # TODO: Later don't always restart on looping.
     print_startup_message()
-    wakeup_device()
-    unlock_screen()
-    open_video_camera()
+    adb_device_sleep() # Get a consistent starting state for repeatability.
+    adb_device_wakeup()
+    adb_unlock_screen()
+    adb_open_video_camera()
 
-    video_paths = monitor_record_and_pull_videos()
-    adb_toggle_power() # Turn device off after use.
+    video_paths = monitor_record_and_pull_videos(video_start_number)
+    adb_device_sleep() # Put the device to sleep after use.
 
     for vid in video_paths:
         print(f"\n{'='*12} {vid} {'='*30}")
@@ -525,8 +568,39 @@ def main():
         extract_audio_from_video(vid)
         postprocess_video_file(vid)
 
+    video_end_number = video_start_number + len(video_paths) - 1
+    return video_end_number
+
+def query_yes_no(query_string):
+    """Query the user for a yes or no response."""
+    yes_answers = {"y", "Y", "yes", "Yes"}
+    no_answers = {"n", "N", "no", "No", "q", "Q", "quit", "Quit"}
+
+    answer = False
+    while True:
+        response = input(query_string)
+        response = response.strip()
+        if not (response in yes_answers or response in no_answers):
+            continue
+        if response in yes_answers:
+            answer = True
+        break
+    return answer
+
 if __name__ == "__main__":
 
     args = parse_command_line() # Put `args` in global scope so all funs can use it.
-    main()
+    video_start_number = args.numbering_start[0]
+
+    count = 0
+    while True:
+        count += 1
+        video_end_number = main(video_start_number)
+        video_start_number = video_end_number + 1
+        if not args.loop:
+            break
+        else:
+            cont = query_yes_no(f"\nFinished recdroidvid loop {count}, continue? [ynq]: ")
+            if not cont:
+                break
 
