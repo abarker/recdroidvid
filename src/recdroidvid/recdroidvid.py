@@ -38,7 +38,7 @@ SCRCPY_EXTRA_COMMAND_LINE_ARGS = ("--stay-awake --disable-screensaver --display-
 
 #VIDEO_PLAYER_CMD = "pl"
 #VIDEO_PLAYER_CMD_JACK = "pl --jack"
-BASE_VIDEO_PLAYER_CMD = ["mpv", "--loop=0",
+BASE_VIDEO_PLAYER_CMD = ["mpv", "--loop=inf",
                                 "--autofit=1080", # Set the width of displayed video.
                                 "--geometry=50%:70%", # Set initial position on screen.
                                 "--autosync=30", "--cache=yes",
@@ -549,10 +549,8 @@ def print_info_about_pulled_video(video_path):
 # Main.
 #
 
-def main(video_start_number):
+def startup_device_and_run(video_start_number):
     """Main script functionality."""
-    # TODO: Later don't always restart on looping.
-    print_startup_message()
     adb_device_sleep() # Get a consistent starting state for repeatability.
     adb_device_wakeup()
     adb_unlock_screen()
@@ -570,6 +568,23 @@ def main(video_start_number):
 
     video_end_number = video_start_number + len(video_paths) - 1
     return video_end_number
+
+def main():
+    """Outer loop over invocations."""
+    video_start_number = args.numbering_start[0]
+    print_startup_message()
+
+    count = 0
+    while True:
+        count += 1
+        video_end_number = startup_device_and_run(video_start_number)
+        video_start_number = video_end_number + 1
+        if not args.loop:
+            break
+        else:
+            cont = query_yes_no(f"\nFinished recdroidvid loop {count}, continue? [ynq]: ")
+            if not cont:
+                break
 
 def query_yes_no(query_string):
     """Query the user for a yes or no response."""
@@ -590,17 +605,6 @@ def query_yes_no(query_string):
 if __name__ == "__main__":
 
     args = parse_command_line() # Put `args` in global scope so all funs can use it.
-    video_start_number = args.numbering_start[0]
+    main()
 
-    count = 0
-    while True:
-        count += 1
-        video_end_number = main(video_start_number)
-        video_start_number = video_end_number + 1
-        if not args.loop:
-            break
-        else:
-            cont = query_yes_no(f"\nFinished recdroidvid loop {count}, continue? [ynq]: ")
-            if not cont:
-                break
 
