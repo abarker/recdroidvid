@@ -250,13 +250,16 @@ def parse_command_line():
     parser.add_argument("--numbering-start", "-n", type=int, nargs=1, metavar="INTEGER",
                         default=[1], help="""The number at which to start numbering
                         pulled videos.  The number is currently appended to the user-defined
-                        prefix and defaults to 1.""")
+                        prefix and defaults to 1.  Allows for restarting and continuing
+                        a naming sequence.""")
 
     parser.add_argument("--loop", "-l", action="store_true",
                         default=False, help="""Loop the recording, querying between
-                        invocations of `scrcpy` as to whether or not to continue.
-                        Video numbering (as included in the filename) is incremented
-                        on each loop.""")
+                        invocations of `scrcpy` as to whether or not to continue.  This
+                        allows for shutting down the scrcpy display to save CPU and
+                        memory, but then restarting with the same options.
+                        Video numbering (as included in the filename) is automatically
+                        incremented on each loop.""")
 
     parser.add_argument("--autorecord", "-a", action="store_true",
                         default=AUTO_START_RECORDING, help="""Automatically start recording
