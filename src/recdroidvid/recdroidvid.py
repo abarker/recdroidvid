@@ -54,6 +54,7 @@ EXTRACTED_AUDIO_EXTENSION = ".wav"
 TOGGLE_DAW_TRANSPORT_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" space'
 #TOGGLE_DAW_TRANSPORT_CMD = 'xdotool windowactivate "$(xdotool search --onlyvisible --class Ardour | head -1)"'
 RAISE_DAW_ON_TOGGLE = True
+RAISE_DAW_ON_CAMERA_APP_OPEN = True
 RAISE_DAW_TO_TOP_CMD = "xdotool search --onlyvisible --class Ardour windowactivate %@"
 
 SYNC_DAW_TRANSPORT = False # Note this can increase CPU usage (computer and phone, polling).
@@ -611,6 +612,8 @@ def startup_device_and_run(video_start_number):
     adb_device_wakeup()
     adb_unlock_screen()
     adb_open_video_camera()
+    if RAISE_DAW_ON_CAMERA_APP_OPEN:
+        os.system(RAISE_DAW_TO_TOP_CMD)
 
     video_paths = monitor_record_and_pull_videos(video_start_number)
     adb_device_sleep() # Put the device to sleep after use.
@@ -638,8 +641,8 @@ def main():
         if not args.loop:
             break
         else:
-            cont = query_yes_no(f"\nFinished recdroidvid loop {count}, continue? [ynq enter=y]: "
-                                empty_default="y"))
+            cont = query_yes_no(f"\nFinished recdroidvid loop {count}, continue?"
+                                f" [ynq enter=y]: ", empty_default="y")
             if not cont:
                 break
 
