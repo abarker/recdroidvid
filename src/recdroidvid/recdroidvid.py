@@ -86,12 +86,17 @@ QUIT_ANSWERS = {"q", "Q", "quit", "QUIT", "Quit"}
 # Simple utility functions.
 #
 
-def query_yes_no(query_string):
-    """Query the user for a yes or no response."""
+def query_yes_no(query_string, empty_default=None):
+    """Query the user for a yes or no response.  The `empty_default`
+    value can be set to a string to replace an empty response."""
+    # TODO: Can use fun for query audio stuff as well, and later maybe popup.
+    # TODO: Really need a separate flag for accepting quit responses...
     answer = False
     while True:
         response = input(query_string)
         response = response.strip()
+        if empty_default is not None and response == "":
+            response = empty_default
         if not (response in YES_ANSWERS or response in NO_ANSWERS or response in QUIT_ANSWERS):
             continue
         if response in YES_ANSWERS:
@@ -251,7 +256,7 @@ def parse_command_line():
                         default=[1], help="""The number at which to start numbering
                         pulled videos.  The number is currently appended to the user-defined
                         prefix and defaults to 1.  Allows for restarting and continuing
-                        a naming sequence.""")
+                        a naming sequence across invocations of the program.""")
 
     parser.add_argument("--loop", "-l", action="store_true",
                         default=False, help="""Loop the recording, querying between
@@ -259,7 +264,7 @@ def parse_command_line():
                         allows for shutting down the scrcpy display to save CPU and
                         memory, but then restarting with the same options.
                         Video numbering (as included in the filename) is automatically
-                        incremented on each loop.""")
+                        incremented over all the videos, across loops.""")
 
     parser.add_argument("--autorecord", "-a", action="store_true",
                         default=AUTO_START_RECORDING, help="""Automatically start recording
@@ -633,7 +638,8 @@ def main():
         if not args.loop:
             break
         else:
-            cont = query_yes_no(f"\nFinished recdroidvid loop {count}, continue? [ynq]: ")
+            cont = query_yes_no(f"\nFinished recdroidvid loop {count}, continue? [ynq enter=y]: "
+                                empty_default="y"))
             if not cont:
                 break
 
