@@ -10,10 +10,7 @@ Note: Phone cannot be powered down.
 
 """
 
-# TODO: Maybe improve sync of the multiprocessing by having a shared var (or use
-# threading if no shared vars)
-
-# TODO: scrcpy always in center
+# TODO: bring Ardour to top when recording detected.
 
 VERSION = "0.1.0"
 
@@ -54,21 +51,20 @@ EXTRACT_AUDIO = False # Whether to ever extract a AUDIO file from the video.
 QUERY_EXTRACT_AUDIO = False # Ask before extracting AUDIO file.
 EXTRACTED_AUDIO_EXTENSION = ".wav"
 
-# TODO: Now, need to run a BG process that starts a popup always-on-top with a single toggle button.
-# The button then starts ardour and calls adb to push record button when its button is pressed.
-# Wish list: add a track marker at the spot.  Maybe xdotool could do it, calling menu item and
-# entering the text???
 TOGGLE_DAW_TRANSPORT_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" space'
 #TOGGLE_DAW_TRANSPORT_CMD = 'xdotool windowactivate "$(xdotool search --onlyvisible --class Ardour | head -1)"'
-RAISE_ARDOUR_TO_TOP = "xdotool search --onlyvisible --class Ardour windowactivate %@"
+RAISE_DAW_ON_TOGGLE = True
+RAISE_DAW_TO_TOP_CMD = "xdotool search --onlyvisible --class Ardour windowactivate %@"
 
-SYNC_DAW_TRANSPORT = False # Note this can increase CPU usage on computer and phone (polling).
-SYNC_DAW_SLEEP_TIME = 4 # Lag between video on/off button and DAW transport syncing (load/time tradeoff)
+SYNC_DAW_TRANSPORT = False # Note this can increase CPU usage (computer and phone, polling).
+SYNC_DAW_SLEEP_TIME = 4 # Lag between video on/off & DAW transport sync (load/time tradeoff)
 
-# This option records with the ADB screenrecord command.  It is limited to
-# screen resolution(?) and 3min, no sound.
-# https://stackoverflow.com/questions/21938948/how-to-increase-time-limit-of-adb-screen-record-of-android-kitkat
-# Deprecated and may be removed at some point.
+#RECORD_DETECTION_METHOD = "directory size increasing" # More general but requires two calls.
+RECORD_DETECTION_METHOD = ".pending filename prefix" # May be specific to OpenCamera implemetation.
+
+# This option records with the ADB screenrecord command.  It is limited to the
+# screen's resolution(?) and 3 minutes, with no sound.  It is no longer tested
+# and may be removed at some point.  https://stackoverflow.com/questions/21938948/
 USE_SCREENRECORD = False
 
 POSTPROCESS_VIDEOS = False
@@ -80,9 +76,11 @@ from time import sleep
 import subprocess
 import argparse
 import datetime
+import threading
 
 YES_ANSWERS = {"Y", "y", "yes", "YES", "Yes"}
 NO_ANSWERS = {"N", "n", "no", "NO", "No"}
+QUIT_ANSWERS = {"q", "Q", "quit", "QUIT", "Quit"}
 
 #
 # Simple utility functions.
@@ -90,16 +88,13 @@ NO_ANSWERS = {"N", "n", "no", "NO", "No"}
 
 def query_yes_no(query_string):
     """Query the user for a yes or no response."""
-    yes_answers = {"y", "Y", "yes", "Yes"}
-    no_answers = {"n", "N", "no", "No", "q", "Q", "quit", "Quit"}
-
     answer = False
     while True:
         response = input(query_string)
         response = response.strip()
-        if not (response in yes_answers or response in no_answers):
+        if not (response in YES_ANSWERS or response in NO_ANSWERS or response in QUIT_ANSWERS):
             continue
-        if response in yes_answers:
+        if response in YES_ANSWERS:
             answer = True
         break
     return answer
@@ -226,6 +221,13 @@ def adb_directory_size_increasing(dirname, wait_secs=1):
     second_du = second_du.split("\t")[0]
     return int(second_du) > int(first_du)
 
+def adb_pending_video_file_exists(dirname):
+    """Return true if a filename starting with `.pending` is found in the directory.
+    This is an implementation detail of OpenCamera, but can detect recording video
+    in one call (unlike `adb_directory_size_increasing`."""
+    files = adb_ls(dirname, all=True)
+    return any(f.startswith(".pending") for f in files)
+
 #
 # Local machine startup functions.
 #
@@ -237,7 +239,7 @@ def parse_command_line():
                     description="Record a video on mobile via ADB and pull result.")
 
     parser.add_argument("video_file_prefix", type=str, nargs="?", metavar="PREFIXSTRING",
-                        default=["rdv"], help="""The basename or prefix of the pulled video
+                        default="rdv", help="""The basename or prefix of the pulled video
                         file.  Whether name or prefix depends on the method used to
                         record.""")
 
@@ -256,7 +258,7 @@ def parse_command_line():
                         Video numbering (as included in the filename) is incremented
                         on each loop.""")
 
-    parser.add_argument("--autorecord", "-r", action="store_true",
+    parser.add_argument("--autorecord", "-a", action="store_true",
                         default=AUTO_START_RECORDING, help="""Automatically start recording
                         when the scrcpy monitor starts up.""")
 
@@ -265,7 +267,7 @@ def parse_command_line():
                         video recording is detected on the mobile device.  May increase
                         CPU loads on the computer and the mobile device.""")
 
-    parser.add_argument("--audio-extract", "-a", action="store_true",
+    parser.add_argument("--audio-extract", "-w", action="store_true",
                         default=EXTRACT_AUDIO, help="""Extract a separate audio file from
                         each video.""")
 
@@ -309,24 +311,56 @@ def detect_if_jack_running():
 def toggle_daw_transport():
     """Toggle the transport state of the DAW.  Used to sync with recording."""
     os.system(TOGGLE_DAW_TRANSPORT_CMD)
+    if RAISE_DAW_ON_TOGGLE:
+        os.system(RAISE_DAW_TO_TOP_CMD)
 
-def sync_daw_transport_when_video_recording():
+sync_daw_stop_flag = False # Flag to signal the DAW sync thread to stop.
+
+def video_is_recording_on_device():
+    """Function to detect when video is recording on the Android device, returns
+    true or false."""
+    if RECORD_DETECTION_METHOD == "directory size increasing":
+        return adb_directory_size_increasing(args.camera_save_dir[0],
+                                             wait_secs=1)
+    elif RECORD_DETECTION_METHOD == ".pending filename prefix":
+        return adb_pending_video_file_exists(OPENCAMERA_SAVE_DIR)
+    else:
+        print(f"Error in recdroidvid setting: Unrecognized RECORD_DETECTION_METHOD:"
+              "\n   '{RECORD_DETECTION_METHOD}'", file=sys.stderr)
+        sys.exit(1)
+
+def sync_daw_transport_bg_process(stop_flag_fun):
     """Start the DAW transport when video recording is detected on the Android
     device.  Meant to be run as a thread or via multiprocessing to execute at the
     same time as the scrcpy monitor."""
-    # TODO: Another way to do this might be to monitor the output of
-    #     adb shell getevent -l
-    # and look for a BTN_TOUCH DOWN followed by BTN_TOUCH UP
-    # But, you'd need to continuously get the output.
-    rolling = False
+    daw_transport_rolling = False
     while True:
-        if not rolling and adb_directory_size_increasing(args.camera_save_dir[0]):
+        if not daw_transport_rolling and video_is_recording_on_device():
             toggle_daw_transport()
-            rolling = True
-        if rolling and not adb_directory_size_increasing(args.camera_save_dir[0]):
+            daw_transport_rolling = True
+        if daw_transport_rolling and not video_is_recording_on_device():
             toggle_daw_transport()
-            rolling = False
+            daw_transport_rolling = False
+        if stop_flag_fun():
+            break
         sleep(SYNC_DAW_SLEEP_TIME)
+
+def sync_daw_transport_with_video_recording():
+    """Start up the background process to sync the DAW transport when recording
+    starts or stops are detected on the mobile device."""
+    # To use threading instead, set a stop flag as in one of the answers here:
+    # https://stackoverflow.com/questions/323972/is-there-any-way-to-kill-a-thread
+    proc = threading.Thread(target=sync_daw_transport_bg_process,
+                                   args=(lambda: sync_daw_stop_flag,))
+    proc.start()
+    return proc
+
+def sync_daw_process_kill(proc):
+    """Kill the DAW syncing process and reclaim resources."""
+    global sync_daw_stop_flag
+    sync_daw_stop_flag = True
+    proc.join()
+    sync_daw_stop_flag = False # Reset for next time.
 
 #
 # Recording and monitoring functions.
@@ -335,10 +369,11 @@ def sync_daw_transport_when_video_recording():
 def start_screenrecording():
     """Start screenrecording via the ADB `screenrecord` command.  This process is run
     in the background.  The PID is returned along with the video pathname."""
+    # CODE DEPRECATED AND NOW UNTESTED!!!!
     video_out_basename = args.video_file_prefix[0]
     video_out_pathname =  os.path.join(args.camera_save_dir[0], f"{video_out_basename}.mp4")
     tmp_pid_path = f"zzzz_screenrecord_pid_tmp"
-    adb_ls(os.path.dirname(video_out_pathname)) # DOESNT DO ANYTHING?? DEBUG?? TODO
+    adb_ls(os.path.dirname(video_out_pathname)) # DOESNT DO ANYTHING?? DEBUG??
 
     adb(f"adb shell screenrecord {video_out_pathname} & echo $! > {tmp_pid_path}")
 
@@ -348,7 +383,8 @@ def start_screenrecording():
     os.remove(tmp_pid_path)
     sleep(10)
 
-    #adb shell screenrecord --size 720x1280 /storage/emulated/0/DCIM/OpenCamera/$1.mp4 & # TODO takes --size, but messes it up, density??
+    # NOTE, below takes --size, but messes it up, density??
+    #adb shell screenrecord --size 720x1280 /storage/emulated/0/DCIM/OpenCamera/$1.mp4 &
     return pid, video_out_pathname
 
 def start_screen_monitor(block=True):
@@ -414,19 +450,12 @@ def start_monitoring_and_button_push_recording():
             #video_path = os.path.join(args.camera_save_dir[0], video_basename)
 
     if args.sync_to_daw:
-        # Better maybe, for clean end, use a stop flag and threading:  <== or use stop flag/w multiprocessing...
-        # https://stackoverflow.com/questions/323972/is-there-any-way-to-kill-a-thread
-        # Replace multiprocessing with threading, but add args as in above link.
-        # https://thispointer.com/python-how-to-create-a-thread-to-run-a-function-in-parallel/
-        import multiprocessing
-        proc = multiprocessing.Process(target=sync_daw_transport_when_video_recording, args=())
-        proc.start()
+        proc = sync_daw_transport_with_video_recording()
 
     start_screen_monitor(block=True) # This blocks until the screen monitor is closed.
 
     if args.sync_to_daw:
-        sleep(SYNC_DAW_SLEEP_TIME) # Give the process time to detect any final changes.
-        proc.terminate()
+        sync_daw_process_kill(proc)
 
     if adb_directory_size_increasing(args.camera_save_dir[0]):
         adb_tap_camera_button() # Presumably still recording; turn off the camera.
@@ -449,16 +478,16 @@ def generate_video_name(video_number, pulled_vid_name):
         date_time_string = datetime.datetime.now().strftime('%Y-%m-%d_%H:%M:%S_')
     else:
         date_time_string = ""
-    new_vid_name = f"{args.video_file_prefix[0]}_{video_number:02d}_{date_time_string}{pulled_vid_name}"
+    new_vid_name = f"{args.video_file_prefix}_{video_number:02d}_{date_time_string}{pulled_vid_name}"
     return new_vid_name
 
 def monitor_record_and_pull_videos(video_start_number):
     """Record a video on the Android device and pull the resulting file."""
-    if USE_SCREENRECORD:
+    if USE_SCREENRECORD: # NOTE: This method is no longer tested, may be removed.
         recorder_pid, video_path = start_screenrecording(args)
         start_screen_monitor(block=True)
         os.system(f"kill {recorder_pid}")
-        video_path = pull_and_delete_file(video_path) # TODO: does this work with preview??? Haven't tested...
+        video_path = pull_and_delete_file(video_path)
         return [video_path]
 
     else: # Use the method requiring a button push on phone, emulated or actual.
