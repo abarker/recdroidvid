@@ -10,7 +10,16 @@ Note: Phone cannot be powered down.
 
 """
 
-# TODO: bring Ardour to top when recording detected.
+# TODO: put file name/number in the preview mpv view window
+
+# TODO: ardour transport not stopped on shutdown!!!!  Seems to stop when play stops,
+# but not on scrcpy shutdown.
+
+# TODO: in the scrcpy screen, include the file number, also ??????????
+# But probably can't dynamically change the scrcpy title to match what's recorded
+# within a loop.
+
+# Colorama colors.
 
 VERSION = "0.1.0"
 
@@ -26,7 +35,8 @@ AUTO_START_RECORDING = False
 # --rotation=0 --lock-video-orientation=initial --stay-awake
 # --disable-screensaver --display-buffer=50
 SCRCPY_EXTRA_COMMAND_LINE_ARGS = ("--stay-awake --disable-screensaver --display-buffer=50 "
-                                  "--power-off-on-close --window-y=440 --window-height=540 ")
+                                  "--power-off-on-close --window-y=440 --window-height=540 "
+                                  "--window-title={}") # Note the title is formatted in later.
 
 #VIDEO_PLAYER_CMD = "pl"
 #VIDEO_PLAYER_CMD_JACK = "pl --jack"
@@ -135,7 +145,7 @@ def adb(cmd, print_cmd=True, return_stdout=False, return_stderr=False):
     os.remove(tmp_adb_cmd_output_file)
     return cmd_output
 
-def adb_ls(path, all=False, extension_whitelist=None):
+def adb_ls(path, all=False, extension_whitelist=None, print_cmd=True):
     """Run the ADB ls command and return the filenames time-sorted from oldest
     to newest.   If `all` is true the `-a` option to `ls` is used (which gets dotfiles
     too).  The `extension_whitelist` is an optional iterable of required file
@@ -144,9 +154,9 @@ def adb_ls(path, all=False, extension_whitelist=None):
     # NOTE NOTE: `adb shell ls` is DIFFERENT FROM `adb ls`, you need also hidden files with
     # `shell adb` to get `.pending....mp4` files, and there are still a few more in `shell ls`.
     if all:
-        ls_output = adb(f"adb shell ls -ctra {path}", return_stdout=True)
+        ls_output = adb(f"adb shell ls -ctra {path}", return_stdout=True, print_cmd=print_cmd)
     else:
-        ls_output = adb(f"adb shell ls -ctr {path}", return_stdout=True)
+        ls_output = adb(f"adb shell ls -ctr {path}", return_stdout=True, print_cmd=print_cmd)
     ls_list = ls_output.splitlines()
 
     if extension_whitelist:
@@ -231,7 +241,7 @@ def adb_pending_video_file_exists(dirname):
     """Return true if a filename starting with `.pending` is found in the directory.
     This is an implementation detail of OpenCamera, but can detect recording video
     in one call (unlike `adb_directory_size_increasing`."""
-    files = adb_ls(dirname, all=True)
+    files = adb_ls(dirname, all=True, print_cmd=False)
     return any(f.startswith(".pending") for f in files)
 
 #
@@ -430,7 +440,8 @@ def start_screen_monitor(block=True):
         print("Sorry, not implemented.")
         sys.exit(1)
 
-    cmd = f"scrcpy {SCRCPY_EXTRA_COMMAND_LINE_ARGS} {args.scrcpy_args[0]}"
+    window_title_str = f"'video file prefix: {args.video_file_prefix}'"
+    cmd = f"scrcpy {SCRCPY_EXTRA_COMMAND_LINE_ARGS.format(window_title_str)} {args.scrcpy_args[0]}"
     print("\nSYSTEM:", cmd)
     os.system(cmd)
 
@@ -442,37 +453,23 @@ def start_monitoring_and_button_push_recording():
 
     if args.autorecord:
         adb_tap_camera_button()
-        sleep(0.5)
-        if False:
-            # Note, this was the original way to get a single video but always starts
-            # recording right away and only allows one video at a time to be recorded
-            # before closing scrcpy.  It still works as an error check of sorts.
-            after_ls = adb_ls(args.camera_save_dir[0], all=True, extension_whitelist=[VIDEO_FILE_EXTENSION])
-            new_video_files = [f for f in after_ls if f not in before_ls]
-            if len(new_video_files) > 1:
-                print("\nWARNING: Found multiple new files in args.camera_save_dir[0].", file=sys.stderr)
-            if not(new_video_files):
-                print("\nERROR: No new video files found.  Is phone connected via USB?\n", file=sys.stderr)
-            # Previously used lines below.
-            # NOTE: Below line is needed to convert `.pending...mp4` files to the final fname.
-            #video_basename = new_video_files[0].split("-")[-1]
-            #video_path = os.path.join(args.camera_save_dir[0], video_basename)
 
     if args.sync_to_daw:
         proc = sync_daw_transport_with_video_recording()
 
     start_screen_monitor(block=True) # This blocks until the screen monitor is closed.
 
-    if args.sync_to_daw:
-        sync_daw_process_kill(proc)
-
+    # If the user just shut down scrcpy while recording video, stop the recording.
     if adb_directory_size_increasing(args.camera_save_dir[0]):
         adb_tap_camera_button() # Presumably still recording; turn off the camera.
-        if args.sync_to_daw:
-            toggle_daw_transport() # Presumably the DAW transport is still rolling.
+        #if args.sync_to_daw: # Now BG thread is still running to stop DAW transport.
+        #    toggle_daw_transport() # Presumably the DAW transport is still rolling.
         while adb_directory_size_increasing(args.camera_save_dir[0]):
             print("Waiting for save directory to stop increasing in size...")
             sleep(1)
+
+    if args.sync_to_daw:
+        sync_daw_process_kill(proc)
 
     # Get a final snapshot of save directory after recording is finished.
     after_ls = adb_ls(args.camera_save_dir[0], extension_whitelist=[VIDEO_FILE_EXTENSION])
@@ -484,7 +481,7 @@ def start_monitoring_and_button_push_recording():
 def generate_video_name(video_number, pulled_vid_name):
     """Generate the name to rename a pulled video to."""
     if DATE_AND_TIME_IN_VIDEO_NAME:
-        date_time_string = datetime.datetime.now().strftime('%Y-%m-%d_%H:%M:%S_')
+        date_time_string = datetime.datetime.now().strftime('%Y-%m-%d_%H.%M.%S_')
     else:
         date_time_string = ""
     new_vid_name = f"{args.video_file_prefix}_{video_number:02d}_{date_time_string}{pulled_vid_name}"
