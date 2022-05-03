@@ -10,16 +10,7 @@ Note: Phone cannot be powered down.
 
 """
 
-# TODO: put file name/number in the preview mpv view window
-
-# TODO: ardour transport not stopped on shutdown!!!!  Seems to stop when play stops,
-# but not on scrcpy shutdown.
-
-# TODO: in the scrcpy screen, include the file number, also ??????????
-# But probably can't dynamically change the scrcpy title to match what's recorded
-# within a loop.
-
-# Colorama colors.
+# TODO maybe: Colorama colors.
 
 VERSION = "0.1.0"
 
@@ -28,7 +19,6 @@ OPENCAMERA_SAVE_DIR = "/storage/emulated/0/DCIM/OpenCamera/" # Where OpenCamera 
 OPENCAMERA_PACKAGE_NAME = "net.sourceforge.opencamera"
 
 VIDEO_FILE_EXTENSION = ".mp4"
-AUTO_START_RECORDING = False
 
 # Extra command-line args passed to scrcpy, in addition to those passed in from
 # the command line.  Some useful ones: --always-on-top --max-size=1200
@@ -36,7 +26,7 @@ AUTO_START_RECORDING = False
 # --disable-screensaver --display-buffer=50
 SCRCPY_EXTRA_COMMAND_LINE_ARGS = ("--stay-awake --disable-screensaver --display-buffer=50 "
                                   "--power-off-on-close --window-y=440 --window-height=540 "
-                                  "--window-title={}") # Note the title is formatted in later.
+                                  "--window-title=RDB%SCRCPY-TITLE") # Note the title is formatted in later.
 
 #VIDEO_PLAYER_CMD = "pl"
 #VIDEO_PLAYER_CMD_JACK = "pl --jack"
@@ -47,27 +37,23 @@ BASE_VIDEO_PLAYER_CMD = ["mpv", "--loop=inf",
                                 "--osd-duration=200",
                                 "--osd-bar-h=0.5",
                                 #"--really-quiet",  # Turn off when debugged; masks errors.
-                                f"--title='{'='*40} VIDEO PREVIEW {'='*40}'"]
+                                f"--title='{'='*10} VIDEO PREVIEW: RDV%FILENAME {'='*40}'"]
 
 VIDEO_PLAYER_CMD = BASE_VIDEO_PLAYER_CMD + ["--ao=sdl"]
 VIDEO_PLAYER_CMD_JACK = VIDEO_PLAYER_CMD + ["--ao=jack"]
 DETECT_JACK_PROCESS_NAMES = ["qjackctl"] # Search `ps -ef` for these to detect Jack running.
 
-DATE_AND_TIME_IN_VIDEO_NAME = True
 PREVIEW_VIDEO = True
 QUERY_PREVIEW_VIDEO = False
 
-EXTRACT_AUDIO = False # Whether to ever extract a AUDIO file from the video.
 QUERY_EXTRACT_AUDIO = False # Ask before extracting AUDIO file.
 EXTRACTED_AUDIO_EXTENSION = ".wav"
 
 TOGGLE_DAW_TRANSPORT_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" space'
 #TOGGLE_DAW_TRANSPORT_CMD = 'xdotool windowactivate "$(xdotool search --onlyvisible --class Ardour | head -1)"'
-RAISE_DAW_ON_TOGGLE = True
-RAISE_DAW_ON_CAMERA_APP_OPEN = True
 RAISE_DAW_TO_TOP_CMD = "xdotool search --onlyvisible --class Ardour windowactivate %@"
 
-SYNC_DAW_TRANSPORT = False # Note this can increase CPU usage (computer and phone, polling).
+SYNC_DAW_TRANSPORT_WITH_VIDEO_RECORDING = False # Note this can increase CPU usage (computer and phone, polling).
 SYNC_DAW_SLEEP_TIME = 4 # Lag between video on/off & DAW transport sync (load/time tradeoff)
 
 #RECORD_DETECTION_METHOD = "directory size increasing" # More general but requires two calls.
@@ -100,7 +86,6 @@ QUIT_ANSWERS = {"q", "Q", "quit", "QUIT", "Quit"}
 def query_yes_no(query_string, empty_default=None):
     """Query the user for a yes or no response.  The `empty_default`
     value can be set to a string to replace an empty response."""
-    # TODO: Can use fun for query audio stuff as well, and later maybe popup.
     # TODO: Really need a separate flag for accepting quit responses...
     answer = False
     while True:
@@ -115,35 +100,56 @@ def query_yes_no(query_string, empty_default=None):
         break
     return answer
 
+def run_local_cmd_blocking(cmd, *, print_cmd=False, print_cmd_prefix="", macro_dict={},
+                           fail_on_nonzero_exit=True):
+    """Run a local system command.  If `macro_dict` is passed in then all
+    dict keys found in the command string will be replaced by their corresponding values.
+    If `fail_on_nonzero_exit` is false then the return code is the first returned
+    argument.  Otherwise only stdout and stderr are returned."""
+    shell = False
+    if isinstance(cmd, str):
+        shell = True # Run as shell cmd if a string is passed in.
+        for key, value in macro_dict.items():
+            cmd = cmd.replace(key, value)
+        cmd_string = cmd
+    else:
+        for key, value in macro_dict.items():
+            cmd = [s.replace(key, value) for s in cmd]
+        cmd_string = " ".join(cmd)
+
+    if print_cmd:
+        cmd_string = "\n" + print_cmd_prefix + cmd_string
+        print(cmd_string)
+
+    completed_process = subprocess.run(cmd, capture_output=True, shell=shell, check=False,
+                                       encoding="utf-8")
+
+    if fail_on_nonzero_exit and completed_process.returncode != 0:
+        print("\nError, nonzero exit running system command, exiting...", file=sys.stderr)
+        sys.exit(1)
+
+    if fail_on_nonzero_exit:
+        return completed_process.stdout, completed_process.stderr
+    else:
+        return completed_process.returncode, completed_process.stdout, completed_process.stderr
+
 #
 # Android ADB commands.
 #
 
-def adb(cmd, print_cmd=True, return_stdout=False, return_stderr=False):
+def adb(cmd, *, print_cmd=True):
     """Run the ADB command, printing out diagnostics.  Setting `return_output`
     returns the stdout of the command, but the command must be redirectable to
     a temp file.  Returned string is a direct read, with no splitting."""
-    # TODO: This should be done with subprocess.Popen, but it works.
-    if print_cmd:
-        print(f"\nCMD: {cmd}")
-
-    if not (return_stdout or return_stderr):
-        os.system(cmd)
-        return
-
-    tmp_adb_cmd_output_file = "zzzz_tmp_adb_cmd_output_file"
-    if return_stdout and return_stderr:
-        redirect = "1> 2>"
-    elif return_stdout:
-        redirect = ">"
-    elif return_stderr:
-        redirect = "2>"
-
-    os.system(f"{cmd} {redirect} {tmp_adb_cmd_output_file}")
-    with open(tmp_adb_cmd_output_file, "r") as f:
-        cmd_output = f.read()
-    os.remove(tmp_adb_cmd_output_file)
-    return cmd_output
+    returncode, stdout, stderr = run_local_cmd_blocking(cmd, print_cmd=print_cmd, print_cmd_prefix="ADB: ",
+                                                        fail_on_nonzero_exit=False)
+    if stderr.startswith("error: no devices"):
+        print("\nERROR: No devices found, is the phone plugged in via USB?", file=sys.stderr)
+        sys.exit(1)
+    elif returncode != 0:
+        print("\nERROR: ADB command returned nonzero exit status, exiting...", file=sys.stderr)
+        sys.exit(1)
+    return stdout, stderr
 
 def adb_ls(path, all=False, extension_whitelist=None, print_cmd=True):
     """Run the ADB ls command and return the filenames time-sorted from oldest
@@ -154,14 +160,14 @@ def adb_ls(path, all=False, extension_whitelist=None, print_cmd=True):
     # NOTE NOTE: `adb shell ls` is DIFFERENT FROM `adb ls`, you need also hidden files with
     # `shell adb` to get `.pending....mp4` files, and there are still a few more in `shell ls`.
     if all:
-        ls_output = adb(f"adb shell ls -ctra {path}", return_stdout=True, print_cmd=print_cmd)
+        ls_list, ls_stderr = adb(f"adb shell ls -ctra {path}", print_cmd=print_cmd)
     else:
-        ls_output = adb(f"adb shell ls -ctr {path}", return_stdout=True, print_cmd=print_cmd)
-    ls_list = ls_output.splitlines()
+        ls_list, ls_stderr = adb(f"adb shell ls -ctr {path}", print_cmd=print_cmd)
+    ls_list = ls_list.splitlines()
 
     if extension_whitelist:
         for e in extension_whitelist:
-            ls_output = [f for f in ls_output if f.endswith(e)]
+            ls_list = [f for f in ls_list if f.endswith(e)]
     return ls_list
 
 def adb_tap_screen(x, y):
@@ -184,23 +190,12 @@ def adb_toggle_power():
 
 def adb_device_wakeup():
     """Issue an ADB wakeup command."""
-    # TODO: Maybe consolidate code with corresponding sleep command.
-    output = adb(f"adb shell input keyevent KEYCODE_WAKEUP", return_stderr=True)
-    if output.strip():
-        print(output)
-    if output.startswith("error: no devices"): # TODO: Maybe get exit code in adb function.
-        print("ERROR: No devices found, is the phone plugged in via USB?", file=sys.stderr)
-        sys.exit(1)
+    stdout, stderr = adb(f"adb shell input keyevent KEYCODE_WAKEUP")
     sleep(2)
 
 def adb_device_sleep():
     """Issue an ADB sleep command."""
-    output = adb(f"adb shell input keyevent KEYCODE_SLEEP", return_stderr=True)
-    if output.strip():
-        print(output)
-    if output.startswith("error: no devices"):
-        print("ERROR: No devices found, is the phone plugged in via USB?", file=sys.stderr)
-        sys.exit(1)
+    stdout, stderr = adb(f"adb shell input keyevent KEYCODE_SLEEP")
     sleep(2)
 
 def adb_unlock_screen():
@@ -230,10 +225,10 @@ def adb_directory_size_increasing(dirname, wait_secs=1):
     """Return true if the save directory is growing in size (i.e., file is being
     recorded there)."""
     DEBUG = False # Print commands to screen when debugging.
-    first_du = adb(f"adb shell du {dirname}", print_cmd=DEBUG, return_stdout=True)
+    first_du, stderr = adb(f"adb shell du {dirname}", print_cmd=DEBUG)
     first_du = first_du.split("\t")[0]
     sleep(wait_secs)
-    second_du = adb(f"adb shell du {dirname}", print_cmd=DEBUG, return_stdout=True)
+    second_du, stderr = adb(f"adb shell du {dirname}", print_cmd=DEBUG)
     second_du = second_du.split("\t")[0]
     return int(second_du) > int(first_du)
 
@@ -272,23 +267,51 @@ def parse_command_line():
     parser.add_argument("--loop", "-l", action="store_true",
                         default=False, help="""Loop the recording, querying between
                         invocations of `scrcpy` as to whether or not to continue.  This
-                        allows for shutting down the scrcpy display to save CPU and
-                        memory, but then restarting with the same options.
-                        Video numbering (as included in the filename) is automatically
-                        incremented over all the videos, across loops.""")
+                        allows for shutting down the scrcpy display to save both
+                        local CPU and remote device memory (videos are downloaded and
+                        deleted from the device at the end of each loop), but then
+                        restarting with the same options.  Video numbering (as
+                        included in the filename) is automatically incremented over
+                        all the videos, across loops.""")
 
     parser.add_argument("--autorecord", "-a", action="store_true",
-                        default=AUTO_START_RECORDING, help="""Automatically start recording
-                        when the scrcpy monitor starts up.""")
+                        default=False, help="""Automatically start recording when the scrcpy
+                        monitor starts up.""")
 
-    parser.add_argument("--sync-to-daw", "-s", action="store_true",
-                        default=SYNC_DAW_TRANSPORT, help="""Start the DAW transport when
+    parser.add_argument("--date-and-time-in-video-name", "-t", action="store_true",
+                        default=False, help="""Include the date and time in the video names
+                        in a readable format.""")
+
+    parser.add_argument("--sync-daw-transport-with-video-recording", "-s", action="store_true",
+                        default=SYNC_DAW_TRANSPORT_WITH_VIDEO_RECORDING, help="""Start the DAW transport when
                         video recording is detected on the mobile device.  May increase
                         CPU loads on the computer and the mobile device.""")
 
+    parser.add_argument("--toggle-daw-transport-cmd", type=str, nargs=1, metavar="CMD-STRING",
+                        default=[TOGGLE_DAW_TRANSPORT_CMD], help="""A system command to toggle the
+                        DAW transport.  Used when the `--sync-to-daw` option is chosen.  The
+                        default uses xdotool to send a space-bar character to Ardour.""")
+
+    parser.add_argument("--raise-daw-on-camera-app-open", "-q", action="store_true",
+                        default=False, help="""Raise the DAW to the top
+                        of the window stack when the camara app is opened on the mobile device.
+                        Works well when scrcpy is also passed the `--always-on-top` option.""")
+
+    parser.add_argument("--raise-daw-on-transport-toggle", "-r", action="store_true",
+                        default=False, help="""Raise the DAW to the top
+                        of the window stack whenever the DAW transport is toggled by the `--sync-to-daw`
+                        option.  Works well when scrcpy is also passed the `--always-on-top` option.""")
+
+    parser.add_argument("--raise-daw-to-top-cmd", type=str, nargs=1, metavar="CMD-STRING",
+                        default=[RAISE_DAW_TO_TOP_CMD], help="""A system command to raise the
+                        DAW windows to the top of the window stack.  Used when either of the
+                        `--raise_daw_on_camera_app_open` or `--raise-daw-on-transport-toggle`
+                        options are selected.  The default uses xdotool to activate any Ardour
+                        windows.""")
+
     parser.add_argument("--audio-extract", "-w", action="store_true",
-                        default=EXTRACT_AUDIO, help="""Extract a separate audio file from
-                        each video.""")
+                        default=False, help="""Extract a separate audio file (currently
+                        always a WAV file) from each video.""")
 
     parser.add_argument("--camera-save-dir", "-d", type=str, nargs=1, metavar="DIRPATH",
                         default=[OPENCAMERA_SAVE_DIR], help="""The directory on the remote
@@ -329,9 +352,11 @@ def detect_if_jack_running():
 
 def toggle_daw_transport():
     """Toggle the transport state of the DAW.  Used to sync with recording."""
-    os.system(TOGGLE_DAW_TRANSPORT_CMD)
-    if RAISE_DAW_ON_TOGGLE:
-        os.system(RAISE_DAW_TO_TOP_CMD)
+    print("\nToggling DAW transport:", args.toggle_daw_transport_cmd[0])
+    os.system(args.toggle_daw_transport_cmd[0])
+    if args.raise_daw_on_transport_toggle:
+        print("\nRaising DAW to top of Window stack:", args.raise_daw_to_top_cmd[0])
+        os.system(args.raise_daw_to_top_cmd[0])
 
 sync_daw_stop_flag = False # Flag to signal the DAW sync thread to stop.
 
@@ -345,7 +370,7 @@ def video_is_recording_on_device():
         return adb_pending_video_file_exists(OPENCAMERA_SAVE_DIR)
     else:
         print(f"Error in recdroidvid setting: Unrecognized RECORD_DETECTION_METHOD:"
-              "\n   '{RECORD_DETECTION_METHOD}'", file=sys.stderr)
+              f"\n   '{RECORD_DETECTION_METHOD}'", file=sys.stderr)
         sys.exit(1)
 
 def sync_daw_transport_bg_process(stop_flag_fun):
@@ -441,9 +466,11 @@ def start_screen_monitor(block=True):
         sys.exit(1)
 
     window_title_str = f"'video file prefix: {args.video_file_prefix}'"
-    cmd = f"scrcpy {SCRCPY_EXTRA_COMMAND_LINE_ARGS.format(window_title_str)} {args.scrcpy_args[0]}"
-    print("\nSYSTEM:", cmd)
-    os.system(cmd)
+    cmd = f"scrcpy {SCRCPY_EXTRA_COMMAND_LINE_ARGS} {args.scrcpy_args[0]}"
+    #print("\nSYSTEM:", cmd)
+    #os.system(cmd)
+    run_local_cmd_blocking(cmd, print_cmd=True, print_cmd_prefix="SYSTEM: ",
+                           macro_dict={"RDB%SCRCPY-TITLE": window_title_str})
 
 def start_monitoring_and_button_push_recording():
     """Emulate a button push to start and stop recording."""
@@ -454,7 +481,7 @@ def start_monitoring_and_button_push_recording():
     if args.autorecord:
         adb_tap_camera_button()
 
-    if args.sync_to_daw:
+    if args.sync_daw_transport_with_video_recording:
         proc = sync_daw_transport_with_video_recording()
 
     start_screen_monitor(block=True) # This blocks until the screen monitor is closed.
@@ -462,13 +489,13 @@ def start_monitoring_and_button_push_recording():
     # If the user just shut down scrcpy while recording video, stop the recording.
     if adb_directory_size_increasing(args.camera_save_dir[0]):
         adb_tap_camera_button() # Presumably still recording; turn off the camera.
-        #if args.sync_to_daw: # Now BG thread is still running to stop DAW transport.
+        #if args.sync_daw_transport_with_video_recording: # Now BG thread is still running to stop DAW transport.
         #    toggle_daw_transport() # Presumably the DAW transport is still rolling.
         while adb_directory_size_increasing(args.camera_save_dir[0]):
             print("Waiting for save directory to stop increasing in size...")
             sleep(1)
 
-    if args.sync_to_daw:
+    if args.sync_daw_transport_with_video_recording:
         sync_daw_process_kill(proc)
 
     # Get a final snapshot of save directory after recording is finished.
@@ -480,7 +507,7 @@ def start_monitoring_and_button_push_recording():
 
 def generate_video_name(video_number, pulled_vid_name):
     """Generate the name to rename a pulled video to."""
-    if DATE_AND_TIME_IN_VIDEO_NAME:
+    if args.date_and_time_in_video_name:
         date_time_string = datetime.datetime.now().strftime('%Y-%m-%d_%H.%M.%S_')
     else:
         date_time_string = ""
@@ -531,16 +558,20 @@ def preview_video(video_path):
     if not (PREVIEW_VIDEO or QUERY_PREVIEW_VIDEO):
         return
 
+    def replace_macros(cmd):
+        """Replace macro name RDV%FILENAME if found."""
+        return [s.replace("RDV%FILENAME", os.path.basename(video_path)) for s in cmd]
+
     def run_preview(video_path):
         """Run a preview of the video."""
         if detect_if_jack_running():
             print("\nDetected jack running via qjackctl.")
-            cmd = VIDEO_PLAYER_CMD_JACK + [f"{video_path}"]
+            cmd = replace_macros(VIDEO_PLAYER_CMD_JACK) + [f"{video_path}"]
         else:
             print("\nDid not detect jack running via qjackctl.")
-            cmd = VIDEO_PLAYER_CMD + [f"{video_path}"]
+            cmd = replace_macros(VIDEO_PLAYER_CMD) + [f"{video_path}"]
         print(f"\nRunning:", " ".join(cmd))
-        subprocess.run(cmd) # This FAILS for some reason.
+        subprocess.run(cmd)
 
     if QUERY_PREVIEW_VIDEO:
         preview = input("\nRun preview? ")
@@ -609,8 +640,9 @@ def startup_device_and_run(video_start_number):
     adb_device_wakeup()
     adb_unlock_screen()
     adb_open_video_camera()
-    if RAISE_DAW_ON_CAMERA_APP_OPEN:
-        os.system(RAISE_DAW_TO_TOP_CMD)
+    if args.raise_daw_on_camera_app_open:
+        print("\nRaising DAW to top of Window stack:", args.raise_daw_to_top_cmd[0])
+        os.system(args.raise_daw_to_top_cmd[0])
 
     video_paths = monitor_record_and_pull_videos(video_start_number)
     adb_device_sleep() # Put the device to sleep after use.
@@ -626,7 +658,7 @@ def startup_device_and_run(video_start_number):
     return video_end_number
 
 def main():
-    """Outer loop over invocations."""
+    """Outer loop over invocations of the scrcpy screen monitor."""
     video_start_number = args.numbering_start[0]
     print_startup_message()
 
@@ -645,7 +677,7 @@ def main():
 
 if __name__ == "__main__":
 
-    args = parse_command_line() # Put `args` in global scope so all funs can use it.
+    args = parse_command_line() # In global scope so all funs can use it.
     main()
 
 
