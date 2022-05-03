@@ -6,11 +6,9 @@ Usage: recdroidvid.py
 Be sure to install scrcpy and set phone to allow for ADB communication over
 USB.  See the video recording notes in ardour directory for details.
 
-Note: Phone cannot be powered down.
-
 """
 
-# TODO maybe: Colorama colors.
+# TODO maybe: Colorama colors on output text.
 
 VERSION = "0.1.0"
 
@@ -37,7 +35,7 @@ BASE_VIDEO_PLAYER_CMD = ["mpv", "--loop=inf",
                                 "--osd-duration=200",
                                 "--osd-bar-h=0.5",
                                 #"--really-quiet",  # Turn off when debugged; masks errors.
-                                f"--title='{'='*10} VIDEO PREVIEW: RDV%FILENAME {'='*40}'"]
+                                f"--title='{'='*8} VIDEO PREVIEW: RDV%FILENAME {'='*40}'"]
 
 VIDEO_PLAYER_CMD = BASE_VIDEO_PLAYER_CMD + ["--ao=sdl"]
 VIDEO_PLAYER_CMD_JACK = VIDEO_PLAYER_CMD + ["--ao=jack"]
@@ -132,6 +130,12 @@ def run_local_cmd_blocking(cmd, *, print_cmd=False, print_cmd_prefix="", macro_d
         return completed_process.stdout, completed_process.stderr
     else:
         return completed_process.returncode, completed_process.stdout, completed_process.stderr
+
+def indent_lines(string, n=4):
+    """Indent the lines in a string."""
+    string_list = string.splitlines()
+    string_list = [" "*n + i for i in string_list]
+    return "\n".join(string_list)
 
 #
 # Android ADB commands.
@@ -350,13 +354,21 @@ def detect_if_jack_running():
 # Functions for syncing with DAW.
 #
 
+def raise_daw_in_window_stack():
+    """Run the command to raise the DAW in the window stack."""
+    print("\nRaising DAW to top of Window stack:", args.raise_daw_to_top_cmd[0])
+    # Allow the command to fail, but issue a warning.
+    returncode, stdout, stderr = run_local_cmd_blocking(args.raise_daw_to_top_cmd[0],
+                                                        fail_on_nonzero_exit=False)
+    if returncode != 0:
+        print("\nWARNING: Nonzero exit status running the raise-DAW command.", file=sys.stderr)
+
 def toggle_daw_transport():
     """Toggle the transport state of the DAW.  Used to sync with recording."""
     print("\nToggling DAW transport:", args.toggle_daw_transport_cmd[0])
-    os.system(args.toggle_daw_transport_cmd[0])
+    run_local_cmd_blocking(args.toggle_daw_transport_cmd[0])
     if args.raise_daw_on_transport_toggle:
-        print("\nRaising DAW to top of Window stack:", args.raise_daw_to_top_cmd[0])
-        os.system(args.raise_daw_to_top_cmd[0])
+        raise_daw_in_window_stack()
 
 sync_daw_stop_flag = False # Flag to signal the DAW sync thread to stop.
 
@@ -468,9 +480,13 @@ def start_screen_monitor(block=True):
     window_title_str = f"'video file prefix: {args.video_file_prefix}'"
     cmd = f"scrcpy {SCRCPY_EXTRA_COMMAND_LINE_ARGS} {args.scrcpy_args[0]}"
     #print("\nSYSTEM:", cmd)
-    #os.system(cmd)
-    run_local_cmd_blocking(cmd, print_cmd=True, print_cmd_prefix="SYSTEM: ",
-                           macro_dict={"RDB%SCRCPY-TITLE": window_title_str})
+    #os.system(cmd) # TODO this may be better since it writes to the screen as it goes...
+    stdout, stderr = run_local_cmd_blocking(cmd, print_cmd=True, print_cmd_prefix="SYSTEM: ",
+                                            macro_dict={"RDB%SCRCPY-TITLE": window_title_str})
+    print("\nscrcpy stdout:")
+    print(indent_lines(stdout, 4))
+    print("\nscrcpy stderr:")
+    print(indent_lines(stderr, 4))
 
 def start_monitoring_and_button_push_recording():
     """Emulate a button push to start and stop recording."""
@@ -519,7 +535,7 @@ def monitor_record_and_pull_videos(video_start_number):
     if USE_SCREENRECORD: # NOTE: This method is no longer tested, may be removed.
         recorder_pid, video_path = start_screenrecording(args)
         start_screen_monitor(block=True)
-        os.system(f"kill {recorder_pid}")
+        run_local_cmd_blocking(f"kill {recorder_pid}")
         video_path = pull_and_delete_file(video_path)
         return [video_path]
 
@@ -596,7 +612,7 @@ def extract_audio_from_video(video_path):
         # https://superuser.com/questions/609740/extracting-wav-from-mp4-while-preserving-the-highest-possible-quality
         cmd = f"ffmpeg -i {video_path} -map 0:a {output_audio_path} -loglevel quiet"
         print("  ", cmd)
-        os.system(cmd)
+        run_local_cmd_blocking(cmd)
         print("\nAudio extracted.")
 
     if QUERY_EXTRACT_AUDIO:
@@ -628,7 +644,9 @@ def print_info_about_pulled_video(video_path):
            f" stream=codec_name,width,height,duration,size,bit_rate"
            f" -of default=noprint_wrappers=1 {video_path} | grep -v 'TAG:'")
     print("\nRunning ffprobe on saved video file:") # TODO, refine info and maybe print better.
-    os.system(cmd)
+    stdout, stderr = run_local_cmd_blocking(cmd)
+    print(indent_lines(stdout, 4))
+    print(indent_lines(stderr, 4))
 
 #
 # High-level functions.
@@ -641,8 +659,7 @@ def startup_device_and_run(video_start_number):
     adb_unlock_screen()
     adb_open_video_camera()
     if args.raise_daw_on_camera_app_open:
-        print("\nRaising DAW to top of Window stack:", args.raise_daw_to_top_cmd[0])
-        os.system(args.raise_daw_to_top_cmd[0])
+        raise_daw_in_window_stack()
 
     video_paths = monitor_record_and_pull_videos(video_start_number)
     adb_device_sleep() # Put the device to sleep after use.
