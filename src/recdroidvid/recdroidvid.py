@@ -18,13 +18,13 @@ OPENCAMERA_PACKAGE_NAME = "net.sourceforge.opencamera"
 
 VIDEO_FILE_EXTENSION = ".mp4"
 
-# Extra command-line args passed to scrcpy, in addition to those passed in from
-# the command line.  Some useful ones: --always-on-top --max-size=1200
-# --rotation=0 --lock-video-orientation=initial --stay-awake
-# --disable-screensaver --display-buffer=50
-SCRCPY_COMMAND_LINE_ARGS = ("--stay-awake --disable-screensaver --display-buffer=50 "
-                                  "--power-off-on-close --window-y=440 --window-height=540 "
-                                  "--window-title=RDB%SCRCPY-TITLE") # Note the title is formatted in later.
+# The default command-line args passed to scrcpy. TODO: How to best manage user versions???
+# Note the title macro is substituted-in later.
+SCRCPY_COMMAND_LINE_ARGS = ["--stay-awake", "--disable-screensaver", "--display-buffer=50",
+                            "--window-y=440", "--window-height=540",
+                            "--window-title=RDB%SCRCPY-TITLE", "--always-on-top",
+                            "--max-size=1200", "--rotation=0",
+                            "--lock-video-orientation=initial"]
 
 #VIDEO_PLAYER_CMD = "pl"
 #VIDEO_PLAYER_CMD_JACK = "pl --jack"
@@ -486,7 +486,7 @@ def start_screen_monitor():
     #scrcpy --record=$1.mp4 --record-format=mp4 --rotation=0 --lock-video-orientation=initial --stay-awake --disable-screensaver --display-buffer=50 --crop 720:1280:0:320 # --crop 720:1600:0:0
 
     window_title_str = f"'video file prefix: {args.video_file_prefix}'"
-    scrcpy_cmd = f"scrcpy {args.scrcpy_args[0]}"
+    scrcpy_cmd = f"scrcpy {' '.join(args.scrcpy_args[0])}"
     run_local_cmd_blocking(scrcpy_cmd, print_cmd=True, print_cmd_prefix="SYSTEM: ",
                            macro_dict={"RDB%SCRCPY-TITLE": window_title_str},
                            capture_output=False)
