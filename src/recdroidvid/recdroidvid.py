@@ -22,7 +22,7 @@ VIDEO_FILE_EXTENSION = ".mp4"
 # the command line.  Some useful ones: --always-on-top --max-size=1200
 # --rotation=0 --lock-video-orientation=initial --stay-awake
 # --disable-screensaver --display-buffer=50
-SCRCPY_EXTRA_COMMAND_LINE_ARGS = ("--stay-awake --disable-screensaver --display-buffer=50 "
+SCRCPY_COMMAND_LINE_ARGS = ("--stay-awake --disable-screensaver --display-buffer=50 "
                                   "--power-off-on-close --window-y=440 --window-height=540 "
                                   "--window-title=RDB%SCRCPY-TITLE") # Note the title is formatted in later.
 
@@ -99,13 +99,20 @@ def query_yes_no(query_string, empty_default=None):
     return answer
 
 def run_local_cmd_blocking(cmd, *, print_cmd=False, print_cmd_prefix="", macro_dict={},
-                           fail_on_nonzero_exit=True, capture_output=True, shell=False):
-    """Run a local system command.  If `macro_dict` is passed in then all
-    dict keys found in the command string will be replaced by their corresponding values.
-    If `fail_on_nonzero_exit` is false then the return code is the first returned
-    argument.  Otherwise only stdout and stderr are returned, assuming `capture_output`
-    is true.  Note that when `capture_output` is false the process output goes to the
+                           fail_on_nonzero_exit=True, capture_output=True):
+
+    """Run a local system command.  If a string is passed in as `cmd` then
+    `shell=True` is assumed.  If `macro_dict` is passed in then all dict keys
+    found in the strings of `cmd` will be replaced by their corresponding values.
+
+    If `fail_on_nonzero_exit` is false then the return code is the first
+    returned argument.  Otherwise only stdout and stderr are returned, assuming
+    `capture_output` is true.
+
+    Note that when `capture_output` is false the process output goes to the
     terminal as it runs, otherwise it doesn't."""
+
+    shell=False
     if isinstance(cmd, str):
         shell = True # Run as shell cmd if a string is passed in.
         for key, value in macro_dict.items():
@@ -263,8 +270,8 @@ def parse_command_line():
                         record.""")
 
     parser.add_argument("--scrcpy-args", "-y", type=str, nargs=1, metavar="STRING-OF-ARGS",
-                        default=[""], help="""An optional string of extra arguments to pass
-                        directly to the `scrcpy` program.""")
+                        default=[SCRCPY_COMMAND_LINE_ARGS], help="""An optional string
+                        of arguments to pass directly to the `scrcpy` program.""")
 
     parser.add_argument("--numbering-start", "-n", type=int, nargs=1, metavar="INTEGER",
                         default=[1], help="""The number at which to start numbering
@@ -447,8 +454,8 @@ def start_screenrecording():
     #adb shell screenrecord --size 720x1280 /storage/emulated/0/DCIM/OpenCamera/$1.mp4 &
     return pid, video_out_pathname
 
-def start_screen_monitor(block=True):
-    """Monitor only, blocking before kill of screen recording when shuts down."""
+def start_screen_monitor():
+    """Run the scrcpy program as a screen monitor, blocking until it is shut down."""
     # Note cropping is width:height:x:y  [currently FAILS as below, video comes out
     # broken too]
     #
@@ -477,14 +484,9 @@ def start_screen_monitor(block=True):
 
     # Cropped to 16:9.
     #scrcpy --record=$1.mp4 --record-format=mp4 --rotation=0 --lock-video-orientation=initial --stay-awake --disable-screensaver --display-buffer=50 --crop 720:1280:0:320 # --crop 720:1600:0:0
-    if not block:
-        print("Sorry, not implemented.")
-        sys.exit(1)
 
     window_title_str = f"'video file prefix: {args.video_file_prefix}'"
-    scrcpy_cmd = f"scrcpy {SCRCPY_EXTRA_COMMAND_LINE_ARGS} {args.scrcpy_args[0]}"
-    #print("\nSYSTEM:", cmd)
-    #os.system(cmd) # TODO this may be better since it writes to the screen as it goes...
+    scrcpy_cmd = f"scrcpy {args.scrcpy_args[0]}"
     run_local_cmd_blocking(scrcpy_cmd, print_cmd=True, print_cmd_prefix="SYSTEM: ",
                            macro_dict={"RDB%SCRCPY-TITLE": window_title_str},
                            capture_output=False)
@@ -501,7 +503,7 @@ def start_monitoring_and_button_push_recording():
     if args.sync_daw_transport_with_video_recording:
         proc = sync_daw_transport_with_video_recording()
 
-    start_screen_monitor(block=True) # This blocks until the screen monitor is closed.
+    start_screen_monitor() # This blocks until the screen monitor is closed.
 
     # If the user just shut down scrcpy while recording video, stop the recording.
     if adb_directory_size_increasing(args.camera_save_dir[0]):
@@ -577,16 +579,6 @@ def preview_video(video_path):
 
     def run_preview(video_path):
         """Run a preview of the video."""
-        if detect_if_jack_running():
-            print("\nDetected jack running via qjackctl.")
-            cmd = VIDEO_PLAYER_CMD_JACK + [f"{video_path}"]
-        else:
-            print("\nDid not detect jack running via qjackctl.")
-            cmd = VIDEO_PLAYER_CMD + [f"{video_path}"]
-        #print(f"\nRunning:", " ".join(cmd))
-        run_local_cmd_blocking(cmd, print_cmd=True, capture_output=False,
-                               macro_dict={"RDV%FILENAME": os.path.basename(video_path)})
-        #subprocess.run(cmd)
 
     if QUERY_PREVIEW_VIDEO:
         preview = input("\nRun preview? ")
@@ -594,7 +586,14 @@ def preview_video(video_path):
             run_preview(video_path)
     else:
         print("\nRunning preview...")
-        run_preview(video_path)
+        if detect_if_jack_running():
+            print("\nDetected jack running via qjackctl.")
+            preview_cmd = VIDEO_PLAYER_CMD_JACK + [f"{video_path}"]
+        else:
+            print("\nDid not detect jack running via qjackctl.")
+            preview_cmd = VIDEO_PLAYER_CMD + [f"{video_path}"]
+        run_local_cmd_blocking(preview_cmd, print_cmd=True, capture_output=False,
+                           macro_dict={"RDV%FILENAME": os.path.basename(video_path)})
 
 def extract_audio_from_video(video_path):
     """Extract the audio from a video file, of the type with the given extension."""
@@ -610,8 +609,8 @@ def extract_audio_from_video(video_path):
         print(f"\nExtracting audio to file: '{output_audio_path}'")
         # https://superuser.com/questions/609740/extracting-wav-from-mp4-while-preserving-the-highest-possible-quality
         cmd = f"ffmpeg -i {video_path} -map 0:a {output_audio_path} -loglevel quiet"
-        print("  ", cmd)
-        run_local_cmd_blocking(cmd)
+        run_local_cmd_blocking(cmd, print_cmd=True, print_cmd_prefix="SYSTEM: ",
+                               capture_output=False)
         print("\nAudio extracted.")
 
     if QUERY_EXTRACT_AUDIO:
@@ -626,8 +625,8 @@ def postprocess_video_file(video_path):
     if not POSTPROCESS_VIDEOS or not os.path.isfile(video_path):
         return
     postprocess_cmd = POSTPROCESSING_CMD + [f"{video_path}"]
-    print("\nRunning:", " ".join(postprocess_cmd))
-    subprocess.run(postprocess_cmd)
+    run_local_cmd_blocking(postprocess_cmd, print_cmd=True, print_cmd_prefix="SYSTEM: ",
+                           capture_output=False)
 
 def print_info_about_pulled_video(video_path):
     """Print out some information about the resolution, etc., of a video."""
