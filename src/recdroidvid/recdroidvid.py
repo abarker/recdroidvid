@@ -18,8 +18,10 @@ OPENCAMERA_PACKAGE_NAME = "net.sourceforge.opencamera"
 
 VIDEO_FILE_EXTENSION = ".mp4"
 
-# The default command-line args passed to scrcpy. TODO: How to best manage user versions???
+# The default command-line args passed to scrcpy.
 # Note the title macro is substituted-in later.
+# TODO: How to best manage user versions???  What are sensible defaults if nothing passed in?
+# Then I can just pass in as shell script or even a config file...
 SCRCPY_COMMAND_LINE_ARGS = ["--stay-awake", "--disable-screensaver", "--display-buffer=50",
                             "--window-y=440", "--window-height=540",
                             "--window-title=RDB%SCRCPY-TITLE", "--always-on-top",
