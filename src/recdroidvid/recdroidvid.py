@@ -99,12 +99,13 @@ def query_yes_no(query_string, empty_default=None):
     return answer
 
 def run_local_cmd_blocking(cmd, *, print_cmd=False, print_cmd_prefix="", macro_dict={},
-                           fail_on_nonzero_exit=True):
+                           fail_on_nonzero_exit=True, capture_output=True, shell=False):
     """Run a local system command.  If `macro_dict` is passed in then all
     dict keys found in the command string will be replaced by their corresponding values.
     If `fail_on_nonzero_exit` is false then the return code is the first returned
-    argument.  Otherwise only stdout and stderr are returned."""
-    shell = False
+    argument.  Otherwise only stdout and stderr are returned, assuming `capture_output`
+    is true.  Note that when `capture_output` is false the process output goes to the
+    terminal as it runs, otherwise it doesn't."""
     if isinstance(cmd, str):
         shell = True # Run as shell cmd if a string is passed in.
         for key, value in macro_dict.items():
@@ -119,17 +120,20 @@ def run_local_cmd_blocking(cmd, *, print_cmd=False, print_cmd_prefix="", macro_d
         cmd_string = "\n" + print_cmd_prefix + cmd_string
         print(cmd_string)
 
-    completed_process = subprocess.run(cmd, capture_output=True, shell=shell, check=False,
-                                       encoding="utf-8")
+    completed_process = subprocess.run(cmd, capture_output=capture_output, shell=shell,
+                                       check=False, encoding="utf-8")
 
     if fail_on_nonzero_exit and completed_process.returncode != 0:
         print("\nError, nonzero exit running system command, exiting...", file=sys.stderr)
         sys.exit(1)
 
-    if fail_on_nonzero_exit:
-        return completed_process.stdout, completed_process.stderr
-    else:
-        return completed_process.returncode, completed_process.stdout, completed_process.stderr
+    if capture_output:
+        if fail_on_nonzero_exit:
+            return completed_process.stdout, completed_process.stderr
+        else:
+            return completed_process.returncode, completed_process.stdout, completed_process.stderr
+    if not fail_on_nonzero_exit:
+        return completed_process.returncode
 
 def indent_lines(string, n=4):
     """Indent the lines in a string."""
@@ -478,15 +482,12 @@ def start_screen_monitor(block=True):
         sys.exit(1)
 
     window_title_str = f"'video file prefix: {args.video_file_prefix}'"
-    cmd = f"scrcpy {SCRCPY_EXTRA_COMMAND_LINE_ARGS} {args.scrcpy_args[0]}"
+    scrcpy_cmd = f"scrcpy {SCRCPY_EXTRA_COMMAND_LINE_ARGS} {args.scrcpy_args[0]}"
     #print("\nSYSTEM:", cmd)
     #os.system(cmd) # TODO this may be better since it writes to the screen as it goes...
-    stdout, stderr = run_local_cmd_blocking(cmd, print_cmd=True, print_cmd_prefix="SYSTEM: ",
-                                            macro_dict={"RDB%SCRCPY-TITLE": window_title_str})
-    print("\nscrcpy stdout:")
-    print(indent_lines(stdout, 4))
-    print("\nscrcpy stderr:")
-    print(indent_lines(stderr, 4))
+    run_local_cmd_blocking(scrcpy_cmd, print_cmd=True, print_cmd_prefix="SYSTEM: ",
+                           macro_dict={"RDB%SCRCPY-TITLE": window_title_str},
+                           capture_output=False)
 
 def start_monitoring_and_button_push_recording():
     """Emulate a button push to start and stop recording."""
@@ -574,20 +575,18 @@ def preview_video(video_path):
     if not (PREVIEW_VIDEO or QUERY_PREVIEW_VIDEO):
         return
 
-    def replace_macros(cmd):
-        """Replace macro name RDV%FILENAME if found."""
-        return [s.replace("RDV%FILENAME", os.path.basename(video_path)) for s in cmd]
-
     def run_preview(video_path):
         """Run a preview of the video."""
         if detect_if_jack_running():
             print("\nDetected jack running via qjackctl.")
-            cmd = replace_macros(VIDEO_PLAYER_CMD_JACK) + [f"{video_path}"]
+            cmd = VIDEO_PLAYER_CMD_JACK + [f"{video_path}"]
         else:
             print("\nDid not detect jack running via qjackctl.")
-            cmd = replace_macros(VIDEO_PLAYER_CMD) + [f"{video_path}"]
-        print(f"\nRunning:", " ".join(cmd))
-        subprocess.run(cmd)
+            cmd = VIDEO_PLAYER_CMD + [f"{video_path}"]
+        #print(f"\nRunning:", " ".join(cmd))
+        run_local_cmd_blocking(cmd, print_cmd=True, capture_output=False,
+                               macro_dict={"RDV%FILENAME": os.path.basename(video_path)})
+        #subprocess.run(cmd)
 
     if QUERY_PREVIEW_VIDEO:
         preview = input("\nRun preview? ")
@@ -646,7 +645,8 @@ def print_info_about_pulled_video(video_path):
     print("\nRunning ffprobe on saved video file:") # TODO, refine info and maybe print better.
     stdout, stderr = run_local_cmd_blocking(cmd)
     print(indent_lines(stdout, 4))
-    print(indent_lines(stderr, 4))
+    if stderr:
+        print(indent_lines(stderr, 4))
 
 #
 # High-level functions.
