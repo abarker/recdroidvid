@@ -261,6 +261,29 @@ def adb_pending_video_file_exists(dirname):
 # Local machine startup functions.
 #
 
+def read_rc_file():
+    """Read the ~/.recdroidvid_rc file."""
+    rc_path = os.path.abspath(os.path.expanduser("~/.recdroidvid_rc"))
+    if not os.path.isfile(rc_path):
+        return []
+
+    with open(rc_path, "r") as f:
+        text = f.read()
+
+    text_lines = text.splitlines()
+    text_lines = [t for t in text_lines if not t.startswith("#")] # Comments.
+    split_lines = []
+    for t in text_lines:
+        split_lines += t.splitlines()
+    text_lines = [t.strip() for t in split_lines]
+    text_lines = [t for t in text_lines if t] # Empty lines.
+
+    # Do \n continuation,
+    text = "\n".join(text_lines)
+    text = text.replace("\\\n", "") # Do \ continuation.
+    text_lines = text.splitlines()
+    return text_lines
+
 def parse_command_line():
     """Create and return the argparse object to read the command line."""
 
@@ -334,9 +357,9 @@ def parse_command_line():
                         options are selected.  The default uses xdotool to activate any Ardour
                         windows.""")
 
-    parser.add_argument("--audio-extract", "-w", action="store_true",
-                        default=False, help="""Extract a separate audio file (currently
-                        always a WAV file) from each video.""")
+    parser.add_argument("--audio-extract", "-w", action="store_true", default=False,
+                        help="""Extract a separate audio file (currently always a WAV file)
+                        from each video.""")
 
     parser.add_argument("--camera-save-dir", "-d", type=str, nargs=1, metavar="DIRPATH",
                         default=[OPENCAMERA_SAVE_DIR], help="""The directory on the remote
@@ -350,7 +373,13 @@ def parse_command_line():
                         OpenCamera package name.  Look in the URL of the app's PlayStore
                         web site to find this string.""")
 
-    cmdline_args = parser.parse_args()
+    rc_file_args = read_rc_file()
+    #combined_args = rc_file_args + sys.argv[1:]
+    combined_args = sys.argv[1:]
+    #for i in combined_args:   # TODO: Currently need all option VALUES on separate lines from opts... need to parse quotes, too...
+    #    print(i)
+    #sys.exit()
+    cmdline_args = parser.parse_args(args=combined_args)
     return cmdline_args
 
 def print_startup_message():
