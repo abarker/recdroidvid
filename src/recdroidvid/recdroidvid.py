@@ -10,11 +10,13 @@ USB.  See the video recording notes in ardour directory for details.
 
 # TODO maybe: Colorama colors on output text.
 
+# TODO: Read any options from the ~/.recdroidvid_rc file.
+
 VERSION = "0.1.0"
 
 # NOTE: To find this path, look at the info from an OpenCamera video saved on the phone.
 OPENCAMERA_SAVE_DIR = "/storage/emulated/0/DCIM/OpenCamera/" # Where OpenCamera writes video.
-OPENCAMERA_PACKAGE_NAME = "net.sourceforge.opencamera"
+OPENCAMERA_PACKAGE_NAME = "net.sourceforge.opencamera" # Look in URL of PlayStore page to find.
 
 VIDEO_FILE_EXTENSION = ".mp4"
 
@@ -22,11 +24,11 @@ VIDEO_FILE_EXTENSION = ".mp4"
 # Note the title macro is substituted-in later.
 # TODO: How to best manage user versions???  What are sensible defaults if nothing passed in?
 # Then I can just pass in as shell script or even a config file...
-SCRCPY_COMMAND_LINE_ARGS = ["--stay-awake", "--disable-screensaver", "--display-buffer=50",
-                            "--window-y=440", "--window-height=540",
-                            "--window-title=RDB%SCRCPY-TITLE", "--always-on-top",
-                            "--max-size=1200", "--rotation=0",
-                            "--lock-video-orientation=initial"]
+SCRCPY_CMD_DEFAULT = ["scrcpy", "--stay-awake", "--disable-screensaver", "--display-buffer=50",
+                                "--window-y=440", "--window-height=540",
+                                "--window-title=RDB%SCRCPY-TITLE", "--always-on-top",
+                                "--max-size=1200", "--rotation=0",
+                                "--lock-video-orientation=initial"]
 
 #VIDEO_PLAYER_CMD = "pl"
 #VIDEO_PLAYER_CMD_JACK = "pl --jack"
@@ -41,19 +43,19 @@ BASE_VIDEO_PLAYER_CMD = ["mpv", "--loop=inf",
 
 VIDEO_PLAYER_CMD = BASE_VIDEO_PLAYER_CMD + ["--ao=sdl"]
 VIDEO_PLAYER_CMD_JACK = VIDEO_PLAYER_CMD + ["--ao=jack"]
+
 DETECT_JACK_PROCESS_NAMES = ["qjackctl"] # Search `ps -ef` for these to detect Jack running.
 
-PREVIEW_VIDEO = True
-QUERY_PREVIEW_VIDEO = False
-
+QUERY_PREVIEW_VIDEO = False # Ask before previewing video.
 QUERY_EXTRACT_AUDIO = False # Ask before extracting AUDIO file.
+
 EXTRACTED_AUDIO_EXTENSION = ".wav"
 
 TOGGLE_DAW_TRANSPORT_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" space'
 #TOGGLE_DAW_TRANSPORT_CMD = 'xdotool windowactivate "$(xdotool search --onlyvisible --class Ardour | head -1)"'
+
 RAISE_DAW_TO_TOP_CMD = "xdotool search --onlyvisible --class Ardour windowactivate %@"
 
-SYNC_DAW_TRANSPORT_WITH_VIDEO_RECORDING = False # Note this can increase CPU usage (computer and phone, polling).
 SYNC_DAW_SLEEP_TIME = 4 # Lag between video on/off & DAW transport sync (load/time tradeoff)
 
 #RECORD_DETECTION_METHOD = "directory size increasing" # More general but requires two calls.
@@ -61,7 +63,7 @@ RECORD_DETECTION_METHOD = ".pending filename prefix" # May be specific to OpenCa
 
 # This option records with the ADB screenrecord command.  It is limited to the
 # screen's resolution(?) and 3 minutes, with no sound.  It is no longer tested
-# and may be removed at some point.  https://stackoverflow.com/questions/21938948/
+# and will be removed at some point.  https://stackoverflow.com/questions/21938948/
 USE_SCREENRECORD = False
 
 POSTPROCESS_VIDEOS = False
@@ -84,9 +86,9 @@ QUIT_ANSWERS = {"q", "Q", "quit", "QUIT", "Quit"}
 #
 
 def query_yes_no(query_string, empty_default=None):
-    """Query the user for a yes or no response.  The `empty_default`
-    value can be set to a string to replace an empty response."""
-    # TODO: Really need a separate flag for accepting quit responses...
+    """Query the user for a yes or no response.  The `empty_default` value can
+    be set to a string to replace an empty response.  A "quit" response is
+    taken to be the same as "no"."""
     answer = False
     while True:
         response = input(query_string)
@@ -102,10 +104,10 @@ def query_yes_no(query_string, empty_default=None):
 
 def run_local_cmd_blocking(cmd, *, print_cmd=False, print_cmd_prefix="", macro_dict={},
                            fail_on_nonzero_exit=True, capture_output=True):
-
     """Run a local system command.  If a string is passed in as `cmd` then
     `shell=True` is assumed.  If `macro_dict` is passed in then all dict keys
-    found in the strings of `cmd` will be replaced by their corresponding values.
+    found in the strings of `cmd` will be replaced by their corresponding
+    values.
 
     If `fail_on_nonzero_exit` is false then the return code is the first
     returned argument.  Otherwise only stdout and stderr are returned, assuming
@@ -113,7 +115,6 @@ def run_local_cmd_blocking(cmd, *, print_cmd=False, print_cmd_prefix="", macro_d
 
     Note that when `capture_output` is false the process output goes to the
     terminal as it runs, otherwise it doesn't."""
-
     shell=False
     if isinstance(cmd, str):
         shell = True # Run as shell cmd if a string is passed in.
@@ -145,7 +146,7 @@ def run_local_cmd_blocking(cmd, *, print_cmd=False, print_cmd_prefix="", macro_d
         return completed_process.returncode
 
 def indent_lines(string, n=4):
-    """Indent the lines in a string."""
+    """Indent the lines in a string by n spaces."""
     string_list = string.splitlines()
     string_list = [" "*n + i for i in string_list]
     return "\n".join(string_list)
@@ -264,16 +265,19 @@ def parse_command_line():
     """Create and return the argparse object to read the command line."""
 
     parser = argparse.ArgumentParser(
-                    description="Record a video on mobile via ADB and pull result.")
+                        description="Record a video on mobile via ADB and pull result.")
 
     parser.add_argument("video_file_prefix", type=str, nargs="?", metavar="PREFIXSTRING",
                         default="rdv", help="""The basename or prefix of the pulled video
                         file.  Whether name or prefix depends on the method used to
                         record.""")
 
-    parser.add_argument("--scrcpy-args", "-y", type=str, nargs=1, metavar="STRING-OF-ARGS",
-                        default=[SCRCPY_COMMAND_LINE_ARGS], help="""An optional string
-                        of arguments to pass directly to the `scrcpy` program.""")
+    parser.add_argument("--scrcpy-cmd", "-y", type=str, nargs=1, metavar="CMD-STRING",
+                        default=[SCRCPY_CMD_DEFAULT], help="""The command, including
+                        arguments, to be used to launch the scrcpy program.  Otherwise a
+                        default version is used with some common arguments.  Note that
+                        the string `--window-title=RDB%SCRCPY-TITLE` can be used to
+                        substitute-in a more descriptive title for the window.""")
 
     parser.add_argument("--numbering-start", "-n", type=int, nargs=1, metavar="INTEGER",
                         default=[1], help="""The number at which to start numbering
@@ -295,12 +299,16 @@ def parse_command_line():
                         default=False, help="""Automatically start recording when the scrcpy
                         monitor starts up.""")
 
+    parser.add_argument("--preview-video", "-p", action="store_true",
+                        default=False, help="""Preview each video that is downloaded.   Currently
+                        uses the mpv program.""")
+
     parser.add_argument("--date-and-time-in-video-name", "-t", action="store_true",
                         default=False, help="""Include the date and time in the video names
                         in a readable format.""")
 
     parser.add_argument("--sync-daw-transport-with-video-recording", "-s", action="store_true",
-                        default=SYNC_DAW_TRANSPORT_WITH_VIDEO_RECORDING, help="""Start the DAW transport when
+                        default=False, help="""Start the DAW transport when
                         video recording is detected on the mobile device.  May increase
                         CPU loads on the computer and the mobile device.""")
 
@@ -404,11 +412,12 @@ def sync_daw_transport_bg_process(stop_flag_fun):
     same time as the scrcpy monitor."""
     daw_transport_rolling = False
     while True:
-        if not daw_transport_rolling and video_is_recording_on_device():
-            toggle_daw_transport()
+        vid_recording = video_is_recording_on_device()
+        if not daw_transport_rolling and vid_recording:
+            toggle_daw_transport() # Later could be a "start transport" cmd.
             daw_transport_rolling = True
-        if daw_transport_rolling and not video_is_recording_on_device():
-            toggle_daw_transport()
+        if daw_transport_rolling and not vid_recording:
+            toggle_daw_transport() # Later could be a "stop transport" cmd.
             daw_transport_rolling = False
         if stop_flag_fun():
             break
@@ -487,15 +496,18 @@ def start_screen_monitor():
     # Cropped to 16:9.
     #scrcpy --record=$1.mp4 --record-format=mp4 --rotation=0 --lock-video-orientation=initial --stay-awake --disable-screensaver --display-buffer=50 --crop 720:1280:0:320 # --crop 720:1600:0:0
 
+    if not args.scrcpy_cmd:
+        scrcpy_cmd = " ".join(SCRCPY_CMD_DEFAULT)
+    else:
+        scrcpy_cmd = args.scrcpy_cmd[0]
+
     window_title_str = f"'video file prefix: {args.video_file_prefix}'"
-    scrcpy_cmd = f"scrcpy {' '.join(args.scrcpy_args[0])}"
     run_local_cmd_blocking(scrcpy_cmd, print_cmd=True, print_cmd_prefix="SYSTEM: ",
                            macro_dict={"RDB%SCRCPY-TITLE": window_title_str},
                            capture_output=False)
 
 def start_monitoring_and_button_push_recording():
     """Emulate a button push to start and stop recording."""
-
     # Get a snapshot of save directory before recording starts.
     before_ls = adb_ls(args.camera_save_dir[0], extension_whitelist=[VIDEO_FILE_EXTENSION])
 
@@ -576,30 +588,27 @@ def pull_and_delete_file(pathname):
 
 def preview_video(video_path):
     """Run a preview of the video at `video_path`."""
-    if not (PREVIEW_VIDEO or QUERY_PREVIEW_VIDEO):
+    if not (args.preview_video or QUERY_PREVIEW_VIDEO):
         return
-
-    def run_preview(video_path):
-        """Run a preview of the video."""
 
     if QUERY_PREVIEW_VIDEO:
         preview = input("\nRun preview? ")
-        if preview.strip() in YES_ANSWERS:
-            run_preview(video_path)
+        if preview.strip() not in YES_ANSWERS:
+            return
+
+    print("\nRunning preview...")
+    if detect_if_jack_running():
+        print("\nDetected jack running via qjackctl.")
+        preview_cmd = VIDEO_PLAYER_CMD_JACK + [f"{video_path}"]
     else:
-        print("\nRunning preview...")
-        if detect_if_jack_running():
-            print("\nDetected jack running via qjackctl.")
-            preview_cmd = VIDEO_PLAYER_CMD_JACK + [f"{video_path}"]
-        else:
-            print("\nDid not detect jack running via qjackctl.")
-            preview_cmd = VIDEO_PLAYER_CMD + [f"{video_path}"]
-        run_local_cmd_blocking(preview_cmd, print_cmd=True, capture_output=False,
-                           macro_dict={"RDV%FILENAME": os.path.basename(video_path)})
+        print("\nDid not detect jack running via qjackctl.")
+        preview_cmd = VIDEO_PLAYER_CMD + [f"{video_path}"]
+
+    run_local_cmd_blocking(preview_cmd, print_cmd=True, capture_output=False,
+                       macro_dict={"RDV%FILENAME": os.path.basename(video_path)})
 
 def extract_audio_from_video(video_path):
     """Extract the audio from a video file, of the type with the given extension."""
-    # Note screen recording doesn't have audio, only the "button" method.
     if not ((args.audio_extract or QUERY_EXTRACT_AUDIO) and os.path.isfile(video_path)
                                                    and not USE_SCREENRECORD):
         return
@@ -632,18 +641,12 @@ def postprocess_video_file(video_path):
 
 def print_info_about_pulled_video(video_path):
     """Print out some information about the resolution, etc., of a video."""
-    # TODO: Capture output and indent at least.  Print container stuff ahead of codecs
-    # of the streams stuff.
-    # Format: ffprobe -show_format -v error -of default=noprint_wrappers=1 {video_path} | grep -v 'TAG:'
-    # Stream codecs: ffprobe -v error -show_entries stream=codec_name,width,height,duration,size,bit_rate -of default=noprint_wrappers=1 jam3_gategate_roses_v2.mp4
-    # You can also separate the different stream codecs, but codec name should differentiate.
-    #
     # To get JSON: ffprobe -v quiet -print_format json -show_format -show_streams "lolwut.mp4" > "lolwut.mp4.json"
     # In Python search for examples or use library: https://docs.python.org/3/library/json.html
     cmd = (f"ffprobe -pretty -show_format -v error -show_entries"
            f" stream=codec_name,width,height,duration,size,bit_rate"
            f" -of default=noprint_wrappers=1 {video_path} | grep -v 'TAG:'")
-    print("\nRunning ffprobe on saved video file:") # TODO, refine info and maybe print better.
+    print("\nRunning ffprobe on saved video file:")
     stdout, stderr = run_local_cmd_blocking(cmd)
     print(indent_lines(stdout, 4))
     if stderr:
@@ -692,6 +695,8 @@ def main():
                                 f" [ynq enter=y]: ", empty_default="y")
             if not cont:
                 break
+
+    print("\nExiting recdroidvid.")
 
 if __name__ == "__main__":
 
