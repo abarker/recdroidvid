@@ -28,7 +28,7 @@ setup(
     install_requires=["wheel"],
     python_requires=">=3.6",
     entry_points = {
-        "console_scripts": ["recdroidvid = recdroidvid.recdroid.py:process_command_line"]
+        "console_scripts": ["recdroidvid = recdroidvid.recdroidvid_main:main"]
         },
     url="https://github.com/abarker/recdroidvid",
 
