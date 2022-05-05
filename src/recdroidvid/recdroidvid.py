@@ -656,6 +656,7 @@ def print_info_about_pulled_video(video_path):
 # High-level functions.
 #
 
+
 def startup_device_and_run(video_start_number):
     """Main script functionality."""
     adb_device_sleep() # Get a consistent starting state for repeatability.
@@ -678,8 +679,13 @@ def startup_device_and_run(video_start_number):
     video_end_number = video_start_number + len(video_paths) - 1
     return video_end_number
 
+args = None # Set globally from `main` function.
+
 def main():
     """Outer loop over invocations of the scrcpy screen monitor."""
+    global args
+    args = parse_command_line() # In global scope so all funs can use it.
+
     video_start_number = args.numbering_start[0]
     print_startup_message()
 
@@ -700,7 +706,5 @@ def main():
 
 if __name__ == "__main__":
 
-    args = parse_command_line() # In global scope so all funs can use it.
     main()
-
 

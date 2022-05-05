@@ -27,7 +27,10 @@ setup(
     keywords=["android", "linux", "usb", "remote", "adb", "video", "movie", "record", "monitor"],
     install_requires=["wheel"],
     python_requires=">=3.6",
-    #url="https://github.com/abarker/??????????",
+    entry_points = {
+        "console_scripts": ["recdroidvid = recdroidvid.recdroid.py:process_command_line"]
+        },
+    url="https://github.com/abarker/recdroidvid",
 
     license="MIT",
     classifiers=[
