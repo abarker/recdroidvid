@@ -12,27 +12,30 @@ VIDEO_FILE_EXTENSION = ".mp4"
 
 # The default command-line args passed to scrcpy.
 # Note the title macro is substituted-in later.
-SCRCPY_CMD_DEFAULT = ["scrcpy", "--stay-awake", "--disable-screensaver", "--display-buffer=50",
-                                "--window-y=440", "--window-height=540",
-                                "--window-title=RDB%SCRCPY-TITLE", "--always-on-top",
-                                "--max-size=1200", "--rotation=0",
-                                "--lock-video-orientation=initial"]
+SCRCPY_CMD_DEFAULT = ["scrcpy", "--stay-awake",
+                                "--disable-screensaver",
+                                "--display-buffer=20",
+                                "--window-title=RDB%SCRCPY-TITLE",
+                                "--always-on-top",
+                                "--rotation=0",
+                                "--max-size=1200",
+                                "--lock-video-orientation=initial",]
 
-#VIDEO_PLAYER_CMD = "pl"
-#VIDEO_PLAYER_CMD_JACK = "pl --jack"
 BASE_VIDEO_PLAYER_CMD = ["mpv", "--loop=inf",
                                 "--autofit=1080", # Set the width of displayed video.
                                 "--geometry=50%:70%", # Set initial position on screen.
-                                "--autosync=30", "--cache=yes",
+                                "--autosync=30",
+                                "--cache=yes",
                                 "--osd-duration=200",
                                 "--osd-bar-h=0.5",
-                                #"--really-quiet",  # Turn off when debugged; masks errors.
+                                #"--really-quiet", # Turn off when debugged; masks errors.
                                 f"--title='{'='*8} VIDEO PREVIEW: RDV%FILENAME {'='*40}'"]
 
-VIDEO_PLAYER_CMD = BASE_VIDEO_PLAYER_CMD + ["--ao=sdl"]
+VIDEO_PLAYER_CMD = BASE_VIDEO_PLAYER_CMD # + ["--ao=sdl"]
 VIDEO_PLAYER_CMD_JACK = VIDEO_PLAYER_CMD + ["--ao=jack"]
 
-DETECT_JACK_PROCESS_NAMES = ["qjackctl"] # Search `ps -ef` for these to detect Jack running.
+#DETECT_JACK_PROCESS_NAMES = [" qjackctl "] # Search `ps -ef` for these to detect Jack running.
+DETECT_JACK_CMD = "jack_lsp -A" # Cmd to detect jack; nonzero return code if not running.
 
 QUERY_PREVIEW_VIDEO = False # Ask before previewing video.
 QUERY_EXTRACT_AUDIO = False # Ask before extracting AUDIO file.
@@ -84,11 +87,11 @@ def parse_command_line():
                         record.""")
 
     parser.add_argument("--scrcpy-cmd", "-y", type=str, nargs=1, metavar="CMD-STRING",
-                        default=[SCRCPY_CMD_DEFAULT], help="""The command, including
-                        arguments, to be used to launch the scrcpy program.  Otherwise a
-                        default version is used with some common arguments.  Note that
-                        the string `--window-title=RDB%SCRCPY-TITLE` can be used to
-                        substitute-in a more descriptive title for the window.""")
+                        default=[" ".join(SCRCPY_CMD_DEFAULT)], help="""The command,
+                        including arguments, to be used to launch the scrcpy program.
+                        Otherwise a default version is used with some common arguments.
+                        Note that the string `--window-title=RDB%SCRCPY-TITLE` can be used
+                        to substitute-in a more descriptive title for the window.""")
 
     parser.add_argument("--numbering-start", "-n", type=int, nargs=1, metavar="INTEGER",
                         default=[1], help="""The number at which to start numbering
@@ -111,8 +114,19 @@ def parse_command_line():
                         monitor starts up.""")
 
     parser.add_argument("--preview-video", "-p", action="store_true",
-                        default=False, help="""Preview each video that is downloaded.   Currently
-                        uses the mpv program.""")
+                        default=False, help="""Preview each video that is downloaded.
+                        Currently uses the mpv program.""")
+
+    parser.add_argument("--preview-video-cmd", type=str, nargs=1, metavar="CMD-STRING",
+                        default=[" ".join(VIDEO_PLAYER_CMD)], help="""The command used to
+                        invoke a movie player to view the preview.  The default
+                        uses the mpv movie viewer.""")
+
+    parser.add_argument("--preview-video-cmd-jack", type=str, nargs=1, metavar="CMD-STRING",
+                        default=[" ".join(VIDEO_PLAYER_CMD_JACK)], help="""The command used to
+                        invoke a movie player to view the preview when the jack audio
+                        system is detected to be running.  The default uses the mpv
+                        movie viewer.""")
 
     parser.add_argument("--date-and-time-in-video-name", "-t", action="store_true",
                         default=False, help="""Include the date and time in the video names
@@ -162,14 +176,12 @@ def parse_command_line():
                         web site to find this string.""")
 
     rc_file_args = read_rc_file()
-    #print("\nrc_file_args", rc_file_args) # DEBUG prints, remove when tested more.
-    #print("\nsys.argv[1:]", sys.argv[1:])
     combined_args = rc_file_args + sys.argv[1:]
-    #print("\ncombined args", combined_args)
     cmdline_args = parser.parse_args(args=combined_args)
-    #print("\n--scrcpy_cmd", cmdline_args.scrcpy_cmd)
-    args_list.clear()
+
+    args_list.clear() # Reset the args_list to contain the parsed args object.
     args_list.append(cmdline_args)
+
     return cmdline_args
 
 def read_rc_file():

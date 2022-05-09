@@ -27,11 +27,11 @@ import subprocess
 import datetime
 import threading
 
-from .settings_and_options import (parse_command_line, args, DETECT_JACK_PROCESS_NAMES,
+from .settings_and_options import (parse_command_line, args, DETECT_JACK_CMD,
                 USE_SCREENRECORD, RECORD_DETECTION_METHOD, SYNC_DAW_SLEEP_TIME,
                 VIDEO_FILE_EXTENSION, QUERY_EXTRACT_AUDIO, QUERY_PREVIEW_VIDEO,
                 EXTRACTED_AUDIO_EXTENSION, POSTPROCESS_VIDEOS,
-                POSTPROCESSING_CMD, VIDEO_PLAYER_CMD, VIDEO_PLAYER_CMD_JACK)
+                POSTPROCESSING_CMD)
 
 from .utility_functions import query_yes_no, indent_lines, run_local_cmd_blocking
 from . import adb_commands as adb
@@ -48,15 +48,19 @@ def print_startup_message():
 
 def detect_if_jack_running():
     """Determine if the Jack audio system is currently running; return true if it is."""
-    #ps_output_old = subprocess.check_output(["ps", "-ef"]) # DEBUG, Works, but delete when below known to work... TODO
-    ps_output, stderr = run_local_cmd_blocking(["ps", "-ef"])
-    ps_output = ps_output.splitlines()
-    for p in ps_output:
-        #print(p)
-        for pname in DETECT_JACK_PROCESS_NAMES:
-            if pname in p:
-                return True
+    errorcode, stdout, stderr = run_local_cmd_blocking(DETECT_JACK_CMD, fail_on_nonzero_exit=False)
+    if errorcode == 0:
+        return True
     return False
+    ## This older code works, looking at ps output, but is probably less robust.
+    #ps_output, stderr = run_local_cmd_blocking(["ps", "-ef"])
+    #ps_output = ps_output.splitlines()
+    #for p in ps_output:
+    #    #print(p)
+    #    for pname in DETECT_JACK_PROCESS_NAMES:
+    #        if pname in p:
+    #            return True
+    #return False
 
 #
 # Functions for syncing with DAW.
@@ -280,11 +284,11 @@ def preview_video(video_path):
 
     print("\nRunning preview...")
     if detect_if_jack_running():
-        print("\nDetected jack running via qjackctl.")
-        preview_cmd = VIDEO_PLAYER_CMD_JACK + [f"{video_path}"]
+        print("\nDetected jack audio running.")
+        preview_cmd = args().preview_video_cmd_jack[0] + f" {video_path}"
     else:
-        print("\nDid not detect jack running via qjackctl.")
-        preview_cmd = VIDEO_PLAYER_CMD + [f"{video_path}"]
+        print("\nDid not detect jack audio running.")
+        preview_cmd = args().preview_video_cmd[0] + f" {video_path}"
 
     run_local_cmd_blocking(preview_cmd, print_cmd=True, capture_output=False,
                        macro_dict={"RDV%FILENAME": os.path.basename(video_path)})
@@ -331,7 +335,6 @@ def print_info_about_pulled_video(video_path):
 #
 # High-level functions.
 #
-
 
 def startup_device_and_run(video_start_number):
     """Main script functionality."""
