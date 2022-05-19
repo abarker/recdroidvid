@@ -23,8 +23,8 @@ SCRCPY_CMD_DEFAULT = ["scrcpy", "--stay-awake",
 
 BASE_VIDEO_PLAYER_CMD = ["mpv", "--loop=inf",
                                 "--autofit=1080", # Set the width of displayed video.
-                                "--geometry=50%:70%", # Set initial position on screen.
-                                "--autosync=30",
+                                #"--geometry=50%:70%", # Set initial position on screen.
+                                #"--autosync=30",
                                 "--cache=yes",
                                 "--osd-duration=200",
                                 "--osd-bar-h=0.5",
@@ -44,6 +44,8 @@ EXTRACTED_AUDIO_EXTENSION = ".wav"
 
 TOGGLE_DAW_TRANSPORT_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" space'
 #TOGGLE_DAW_TRANSPORT_CMD = 'xdotool windowactivate "$(xdotool search --onlyvisible --class Ardour | head -1)"'
+
+DAW_ADD_MARK_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" tab'
 
 RAISE_DAW_TO_TOP_CMD = "xdotool search --onlyvisible --class Ardour windowactivate %@"
 
@@ -148,9 +150,10 @@ def parse_command_line():
                         Works well when scrcpy is also passed the `--always-on-top` option.""")
 
     parser.add_argument("--raise-daw-on-transport-toggle", "-r", action="store_true",
-                        default=False, help="""Raise the DAW to the top
-                        of the window stack whenever the DAW transport is toggled by the `--sync-to-daw`
-                        option.  Works well when scrcpy is also passed the `--always-on-top` option.""")
+                        default=False, help= """Raise the DAW to the top of the window
+                        stack whenever the DAW transport is toggled by the `--sync-to-daw`
+                        option.  Works well when scrcpy is also passed the
+                        `--always-on-top` option.""")
 
     parser.add_argument("--raise-daw-to-top-cmd", type=str, nargs=1, metavar="CMD-STRING",
                         default=[RAISE_DAW_TO_TOP_CMD], help="""A system command to raise the
