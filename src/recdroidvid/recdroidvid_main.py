@@ -77,14 +77,15 @@ def raise_daw_in_window_stack():
 
 def toggle_daw_transport():
     """Toggle the transport state of the DAW.  Used to sync with recording."""
-    print("\nToggling DAW transport:", args().toggle_daw_transport_cmd[0])
+    print("\nToggle DAW transport cmd:", args().toggle_daw_transport_cmd[0])
     run_local_cmd_blocking(args().toggle_daw_transport_cmd[0])
     if args().raise_daw_on_transport_toggle:
         raise_daw_in_window_stack()
 
 def add_mark_in_daw():
     """Create a new mark in the DAW when recording is started."""
-    print("\nAdding a new mark in the DAW.")
+    from .settings_and_options import DAW_ADD_MARK_CMD
+    print(f"\nAdding a new mark in the DAW: {DAW_ADD_MARK_CMD}")
     run_local_cmd_blocking(DAW_ADD_MARK_CMD)
 
 sync_daw_stop_flag = False # Flag to signal the DAW sync thread to stop.
@@ -110,10 +111,12 @@ def sync_daw_transport_bg_process(stop_flag_fun):
     while True:
         vid_recording = video_is_recording_on_device()
         if not daw_transport_rolling and vid_recording: # Start DAW recording transport.
+            print("\nStarting (toggling) DAW transport.")
             add_mark_in_daw()
             toggle_daw_transport() # Later could be a "start transport" cmd.
             daw_transport_rolling = True
         if daw_transport_rolling and not vid_recording: # Stop DAW recording transport.
+            print("\nStopping (toggling) DAW transport.")
             toggle_daw_transport() # Later could be a "stop transport" cmd.
             daw_transport_rolling = False
         if stop_flag_fun():

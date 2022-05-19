@@ -2,6 +2,9 @@
 
 Fixed options and command-line options.
 
+Note: The keycodes for xdotool.
+   https://gitlab.com/cunidev/gestures/-/wikis/xdotool-list-of-key-codes
+
 """
 
 # NOTE: To find this path, look at the info from an OpenCamera video saved on the phone.
@@ -45,7 +48,7 @@ EXTRACTED_AUDIO_EXTENSION = ".wav"
 TOGGLE_DAW_TRANSPORT_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" space'
 #TOGGLE_DAW_TRANSPORT_CMD = 'xdotool windowactivate "$(xdotool search --onlyvisible --class Ardour | head -1)"'
 
-DAW_ADD_MARK_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" tab'
+DAW_ADD_MARK_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" Tab'
 
 RAISE_DAW_TO_TOP_CMD = "xdotool search --onlyvisible --class Ardour windowactivate %@"
 
