@@ -48,7 +48,7 @@ EXTRACTED_AUDIO_EXTENSION = ".wav"
 TOGGLE_DAW_TRANSPORT_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" space'
 #TOGGLE_DAW_TRANSPORT_CMD = 'xdotool windowactivate "$(xdotool search --onlyvisible --class Ardour | head -1)"'
 
-DAW_ADD_MARK_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" Tab'
+ADD_DAW_MARK_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" Tab'
 
 RAISE_DAW_TO_TOP_CMD = "xdotool search --onlyvisible --class Ardour windowactivate %@"
 
@@ -146,6 +146,15 @@ def parse_command_line():
                         default=[TOGGLE_DAW_TRANSPORT_CMD], help="""A system command to toggle the
                         DAW transport.  Used when the `--sync-to-daw` option is chosen.  The
                         default uses xdotool to send a space-bar character to Ardour.""")
+
+    parser.add_argument("--add-daw-mark-on-transport-start", "-m", action="store_true",
+                        default=False, help="""Whether to add a mark in the DAW when the
+                        transport starts, to help in syncing with the video.""")
+
+    parser.add_argument("--add-daw-mark-cmd", type=str, nargs=1, metavar="CMD-STRING",
+                        default=[ADD_DAW_MARK_CMD], help="""A system command to add
+                        a mark to the DAW at the playhead.  The default uses xdotool to send
+                        a tab character to Ardour.""")
 
     parser.add_argument("--raise-daw-on-camera-app-open", "-q", action="store_true",
                         default=False, help="""Raise the DAW to the top

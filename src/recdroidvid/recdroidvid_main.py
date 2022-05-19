@@ -84,9 +84,8 @@ def toggle_daw_transport():
 
 def add_mark_in_daw():
     """Create a new mark in the DAW when recording is started."""
-    from .settings_and_options import DAW_ADD_MARK_CMD
-    print(f"\nAdding a new mark in the DAW: {DAW_ADD_MARK_CMD}")
-    run_local_cmd_blocking(DAW_ADD_MARK_CMD)
+    print(f"\nAdding a new mark in the DAW: {args().add_daw_mark_cmd[0]}")
+    run_local_cmd_blocking(args().add_daw_mark_cmd[0])
 
 sync_daw_stop_flag = False # Flag to signal the DAW sync thread to stop.
 
@@ -112,7 +111,8 @@ def sync_daw_transport_bg_process(stop_flag_fun):
         vid_recording = video_is_recording_on_device()
         if not daw_transport_rolling and vid_recording: # Start DAW recording transport.
             print("\nStarting (toggling) DAW transport.")
-            add_mark_in_daw()
+            if args().add_daw_mark_on_transport_start:
+                add_mark_in_daw()
             toggle_daw_transport() # Later could be a "start transport" cmd.
             daw_transport_rolling = True
         if daw_transport_rolling and not vid_recording: # Stop DAW recording transport.
