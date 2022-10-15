@@ -48,21 +48,23 @@ Installing via snap is also possible (and may be a more recent version):
 Setup requires that developer mode be activated on the mobile device to allow
 ADB commands via USB:
 
-- Go to ``Settings > > About phone`` and tap the ``Build number`` at the bottom
+- Go to ``Settings > About phone`` and tap the ``Build number`` at the bottom
   seven times to activate developer mode.
 
 - Then go to ``Settings > System > Advanced > Developer Options`` and turn on
   USB debugging.
 
-- Connect the mobile device via USB.
+- Connect the mobile device via USB and authorize it on the Android
+  notification.
 
-See the scrcpy Github page for more information.
+See the scrcpy Github page for more information.  Use ``scrcpy --help | more``
+for information about the available options.
 
 ffmpeg
 ------
 
-This is used to print out information about the pulled movies, as well as to optionally
-extract audio from the video files:
+The ffmpeg program is used to print out information about the pulled movies, as
+well as to optionally extract audio from the video files:
 
 .. code-block:: bash
 
@@ -78,3 +80,115 @@ option to set any movie player program from the command line):
 
     sudo apt install mpv
 
+Options and Customization
+=========================
+
+.. In vim use this to get output:
+       :read !recdroidvid -h
+
+To see the command-line options, run ``recdroidvid --help | more``.
+The output of that command follows.
+
+   usage: recdroidvid [-h] [--scrcpy-cmd CMD-STRING] [--numbering-start INTEGER]
+                      [--loop] [--autorecord] [--preview-video]
+                      [--preview-video-cmd CMD-STRING]
+                      [--preview-video-cmd-jack CMD-STRING]
+                      [--date-and-time-in-video-name]
+                      [--sync-daw-transport-with-video-recording]
+                      [--toggle-daw-transport-cmd CMD-STRING]
+                      [--add-daw-mark-on-transport-start]
+                      [--add-daw-mark-cmd CMD-STRING]
+                      [--raise-daw-on-camera-app-open]
+                      [--raise-daw-on-transport-toggle]
+                      [--raise-daw-to-top-cmd CMD-STRING] [--audio-extract]
+                      [--camera-save-dir DIRPATH]
+                      [--camera-package-name PACKAGENAME]
+                      [PREFIXSTRING]
+   
+   Record a video on mobile via ADB and pull result.
+   
+   positional arguments:
+     PREFIXSTRING          The basename or prefix of the pulled video file.
+                           Whether name or prefix depends on the method used to
+                           record.
+   
+   optional arguments:
+     -h, --help            show this help message and exit
+     --scrcpy-cmd CMD-STRING, -y CMD-STRING
+                           The command, including arguments, to be used to launch
+                           the scrcpy program. Otherwise a default version is
+                           used with some common arguments. Note that the string
+                           `--window-title=RDB_SCRCPY-TITLE` can be used to
+                           substitute-in a more descriptive title for the window.
+     --numbering-start INTEGER, -n INTEGER
+                           The number at which to start numbering pulled videos.
+                           The number is currently appended to the user-defined
+                           prefix and defaults to 1. Allows for restarting and
+                           continuing a naming sequence across invocations of the
+                           program.
+     --loop, -l            Loop the recording, querying between invocations of
+                           `scrcpy` as to whether or not to continue. This allows
+                           for shutting down the scrcpy display to save both
+                           local CPU and remote device memory (videos are
+                           downloaded and deleted from the device at the end of
+                           each loop), but then restarting with the same options.
+                           Video numbering (as included in the filename) is
+                           automatically incremented over all the videos, across
+                           loops.
+     --autorecord, -a      Automatically start recording when the scrcpy monitor
+                           starts up.
+     --preview-video, -p   Preview each video that is downloaded. Currently uses
+                           the mpv program.
+     --preview-video-cmd CMD-STRING
+                           The command used to invoke a movie player to view the
+                           preview. The default uses the mpv movie viewer.
+     --preview-video-cmd-jack CMD-STRING
+                           The command used to invoke a movie player to view the
+                           preview when the jack audio system is detected to be
+                           running. The default uses the mpv movie viewer.
+     --date-and-time-in-video-name, -t
+                           Include the date and time in the video names in a
+                           readable format.
+     --sync-daw-transport-with-video-recording, -s
+                           Start the DAW transport when video recording is
+                           detected on the mobile device. May increase CPU loads
+                           on the computer and the mobile device.
+     --toggle-daw-transport-cmd CMD-STRING
+                           A system command to toggle the DAW transport. Used
+                           when the `--sync-to-daw` option is chosen. The default
+                           uses xdotool to send a space-bar character to Ardour.
+     --add-daw-mark-on-transport-start, -m
+                           Whether to add a mark in the DAW when the transport
+                           starts, to help in syncing with the video.
+     --add-daw-mark-cmd CMD-STRING
+                           A system command to add a mark to the DAW at the
+                           playhead. The default uses xdotool to send a tab
+                           character to Ardour.
+     --raise-daw-on-camera-app-open, -q
+                           Raise the DAW to the top of the window stack when the
+                           camara app is opened on the mobile device. Works well
+                           when scrcpy is also passed the `--always-on-top`
+                           option.
+     --raise-daw-on-transport-toggle, -r
+                           Raise the DAW to the top of the window stack whenever
+                           the DAW transport is toggled by the `--sync-to-daw`
+                           option. Works well when scrcpy is also passed the
+                           `--always-on-top` option.
+     --raise-daw-to-top-cmd CMD-STRING
+                           A system command to raise the DAW windows to the top
+                           of the window stack. Used when either of the
+                           `--raise_daw_on_camera_app_open` or `--raise-daw-on-
+                           transport-toggle` options are selected. The default
+                           uses xdotool to activate any Ardour windows.
+     --audio-extract, -w   Extract a separate audio file (currently always a WAV
+                           file) from each video.
+     --camera-save-dir DIRPATH, -d DIRPATH
+                           The directory on the remote device where the camera
+                           app saves videos. Record a video and look at the
+                           information about the video to find the path. Defaults
+                           to the OpenCamera default save directory.
+     --camera-package-name PACKAGENAME, -c PACKAGENAME
+                           The Android package name of the camera app. Defaults
+                           to "net.sourceforge.opencamera", the OpenCamera
+                           package name. Look in the URL of the app's PlayStore
+                           web site to find this string.

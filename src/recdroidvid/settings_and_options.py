@@ -18,7 +18,7 @@ VIDEO_FILE_EXTENSION = ".mp4"
 SCRCPY_CMD_DEFAULT = ["scrcpy", "--stay-awake",
                                 "--disable-screensaver",
                                 "--display-buffer=20",
-                                "--window-title=RDB%SCRCPY-TITLE",
+                                "--window-title=RDV_SCRCPY_TITLE",
                                 "--always-on-top",
                                 "--rotation=0",
                                 "--max-size=1200",
@@ -32,7 +32,7 @@ BASE_VIDEO_PLAYER_CMD = ["mpv", "--loop=inf",
                                 "--osd-duration=200",
                                 "--osd-bar-h=0.5",
                                 #"--really-quiet", # Turn off when debugged; masks errors.
-                                f"--title='{'='*8} VIDEO PREVIEW: RDV%FILENAME {'='*40}'"]
+                                f"--title='{'='*8} VIDEO PREVIEW: RDV_PREVIEW_FILENAME {'='*40}'"]
 
 VIDEO_PLAYER_CMD = BASE_VIDEO_PLAYER_CMD # + ["--ao=sdl"]
 VIDEO_PLAYER_CMD_JACK = VIDEO_PLAYER_CMD + ["--ao=jack"]
@@ -45,6 +45,7 @@ QUERY_EXTRACT_AUDIO = False # Ask before extracting AUDIO file.
 
 EXTRACTED_AUDIO_EXTENSION = ".wav"
 
+IS_DAW_RUNNING_CMD = 'xdotool search --onlyvisible --class Ardour'
 TOGGLE_DAW_TRANSPORT_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" space'
 #TOGGLE_DAW_TRANSPORT_CMD = 'xdotool windowactivate "$(xdotool search --onlyvisible --class Ardour | head -1)"'
 
@@ -70,7 +71,7 @@ import os
 import argparse
 import ast
 
-args_list = [] # Mutable containter to hold the parsed arguments.
+args_list = [] # A mutable container to hold the parsed arguments.
 
 def args():
     """Return the parsed arguments.  The `parse_command_line` function must be called
@@ -80,10 +81,23 @@ def args():
         raise IndexError
     return args_list[0]
 
+def fmt(text):
+    """Format text for nicer-looking help messages."""
+    # https://docs.python.org/3/library/textwrap.html
+    import textwrap
+    text_lines = textwrap.wrap(textwrap.dedent(text), width=70)
+    print(text_lines)
+    text = "\n".join(text_lines) + "\n\n"
+    print(text)
+    return text
+
 def parse_command_line():
     """Create and return the argparse object to read the command line."""
 
     parser = argparse.ArgumentParser(
+                        prog="recdroidvid",
+                        #formatter_class=argparse.RawTextHelpFormatter,
+                        #formatter_class=argparse.RawDescriptionHelpFormatter,
                         description="Record a video on mobile via ADB and pull result.")
 
     parser.add_argument("video_file_prefix", type=str, nargs="?", metavar="PREFIXSTRING",
@@ -95,7 +109,7 @@ def parse_command_line():
                         default=[" ".join(SCRCPY_CMD_DEFAULT)], help="""The command,
                         including arguments, to be used to launch the scrcpy program.
                         Otherwise a default version is used with some common arguments.
-                        Note that the string `--window-title=RDB%SCRCPY-TITLE` can be used
+                        Note that the string `--window-title=RDV_SCRCPY_TITLE` can be used
                         to substitute-in a more descriptive title for the window.""")
 
     parser.add_argument("--numbering-start", "-n", type=int, nargs=1, metavar="INTEGER",
@@ -125,13 +139,17 @@ def parse_command_line():
     parser.add_argument("--preview-video-cmd", type=str, nargs=1, metavar="CMD-STRING",
                         default=[" ".join(VIDEO_PLAYER_CMD)], help="""The command used to
                         invoke a movie player to view the preview.  The default
-                        uses the mpv movie viewer.""")
+                        uses the mpv movie viewer.  The string 'RDV_PREVIEW_FILENAME', if
+                        present in the command, will be replaced with the title of the
+                        video being previewed.""")
 
     parser.add_argument("--preview-video-cmd-jack", type=str, nargs=1, metavar="CMD-STRING",
                         default=[" ".join(VIDEO_PLAYER_CMD_JACK)], help="""The command used to
                         invoke a movie player to view the preview when the jack audio
                         system is detected to be running.  The default uses the mpv
-                        movie viewer.""")
+                        movie viewer.  The string 'RDV_PREVIEW_FILENAME', if
+                        present in the command, will be replaced with the title of the
+                        video being previewed.""")
 
     parser.add_argument("--date-and-time-in-video-name", "-t", action="store_true",
                         default=False, help="""Include the date and time in the video names
@@ -173,6 +191,11 @@ def parse_command_line():
                         `--raise_daw_on_camera_app_open` or `--raise-daw-on-transport-toggle`
                         options are selected.  The default uses xdotool to activate any Ardour
                         windows.""")
+
+    parser.add_argument("--is-daw-running-cmd", type=str, nargs=1, metavar="CMD-STRING",
+                        default=[IS_DAW_RUNNING_CMD], help="""A system command to test if
+                        the DAW is actually running.  A zero return code means it is, and
+                        a nonzero return code means it isn't.""")
 
     parser.add_argument("--audio-extract", "-w", action="store_true", default=False,
                         help="""Extract a separate audio file (currently always a WAV file)

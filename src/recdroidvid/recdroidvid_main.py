@@ -74,16 +74,35 @@ def raise_daw_in_window_stack():
                                                         fail_on_nonzero_exit=False)
     if returncode != 0:
         print("\nWARNING: Nonzero exit status running the raise-DAW command.", file=sys.stderr)
+    return returncode
+
+def is_daw_running():
+    """Return true or false as to whether the DAW is running."""
+    returncode, stdout, stderr = run_local_cmd_blocking(args().is_daw_running_cmd[0],
+                                                               fail_on_nonzero_exit=False)
+    if returncode != 0:
+        return False
+    return True
 
 def toggle_daw_transport():
     """Toggle the transport state of the DAW.  Used to sync with recording."""
+    if not is_daw_running():
+        print("WARNING: DAW is not detected as running, not toggling transport.",
+                file=sys.stderr)
+        return
     print("\nToggle DAW transport cmd:", args().toggle_daw_transport_cmd[0])
-    run_local_cmd_blocking(args().toggle_daw_transport_cmd[0])
+    returncode, stdout, stderr = run_local_cmd_blocking(args().toggle_daw_transport_cmd[0],
+                                                               fail_on_nonzero_exit=False)
+    if returncode !=0:
+        print("WARNING: Nonzero exit status running the toggle-daw command.", file=sys.stderr)
     if args().raise_daw_on_transport_toggle:
-        raise_daw_in_window_stack()
+        raise_returncode = raise_daw_in_window_stack()
 
 def add_mark_in_daw():
     """Create a new mark in the DAW when recording is started."""
+    if not is_daw_running():
+        print("WARNING: DAW is not detected as running, not adding a mark.", file=sys.stderr)
+        return
     print(f"\nAdding a new mark in the DAW: {args().add_daw_mark_cmd[0]}")
     run_local_cmd_blocking(args().add_daw_mark_cmd[0])
 
@@ -199,9 +218,9 @@ def start_screen_monitor():
 
     scrcpy_cmd = args().scrcpy_cmd[0]
 
-    window_title_str = f"'video file prefix: {args().video_file_prefix}'"
+    window_title_str = f"video file prefix: {args().video_file_prefix}"
     run_local_cmd_blocking(scrcpy_cmd, print_cmd=True, print_cmd_prefix="SYSTEM: ",
-                           macro_dict={"RDB%SCRCPY-TITLE": window_title_str},
+                           macro_dict={"RDV_SCRCPY_TITLE": window_title_str},
                            capture_output=False)
 
 def start_monitoring_and_button_push_recording():
@@ -284,6 +303,9 @@ def pull_and_delete_file(pathname):
     adb.adb(f"adb -d shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:{pathname}")
     return os.path.basename(pathname)
 
+PREVIEW_WINDOW_ALWAYS_ON_TOP = False # TODO, possible feature.  But preview blocking messes it up...
+SET_ACTIVE_WINDOW_ALWAYS_ON_TOP_CMD = ["wmctrl", "-r", ":ACTIVE:", "-b", "toggle,above"]
+
 def preview_video(video_path):
     """Run a preview of the video at `video_path`."""
     if not (args().preview_video or QUERY_PREVIEW_VIDEO):
@@ -300,7 +322,11 @@ def preview_video(video_path):
         preview_cmd = args().preview_video_cmd[0] + f" {video_path}"
 
     run_local_cmd_blocking(preview_cmd, print_cmd=True, capture_output=False,
-                       macro_dict={"RDV%FILENAME": os.path.basename(video_path)})
+                       macro_dict={"RDV_PREVIEW_FILENAME": os.path.basename(video_path)})
+
+    if PREVIEW_WINDOW_ALWAYS_ON_TOP:
+        run_local_cmd_blocking(SET_ACTIVE_WINDOW_ALWAYS_ON_TOP_CMD, print_cmd=True,
+                               capture_output=False)
 
 def extract_audio_from_video(video_path):
     """Extract the audio from a video file, of the type with the given extension."""
