@@ -80,6 +80,10 @@ args_list = [] # A mutable container to hold the parsed arguments.
 def args():
     """Return the parsed arguments.  The `parse_command_line` function must be called
     first."""
+    # Note: Running `parse_command_line` at module import time would allow the
+    # use of a global var `args` rather than a function `args()`.  Which is preferable?
+    # Do you always want to parse the command-line args, or just sometimes when main calls
+    # `parse_command_line`?
     if not args_list:
         print("ERROR: Command-line arguments have not been parsed.", file=sys.stderr)
         raise IndexError
@@ -102,7 +106,12 @@ def parse_command_line():
                         prog="recdroidvid",
                         #formatter_class=argparse.RawTextHelpFormatter,
                         #formatter_class=argparse.RawDescriptionHelpFormatter,
-                        description="Record a video on mobile via ADB and pull result.")
+                        description=
+
+                        """Record a video on mobile via ADB and pull result.  All config
+                        options can be set in a file `.recdroidvid_rc.py`.  The file is
+                        evaluated and the list `rdv_options` in the file is used as the
+                        options list.  See the example config file.""")
 
     parser.add_argument("video_file_prefix", type=str, nargs="?", metavar="PREFIXSTRING",
                         default="rdv", help="""The basename or prefix of the pulled video
@@ -217,15 +226,37 @@ def parse_command_line():
                         OpenCamera package name.  Look in the URL of the app's PlayStore
                         web site to find this string.""")
 
+    parser.add_argument("--config-conditional", type=str, nargs=1, metavar="STRING",
+                        default=["default"], help="""The `.recdroidvid_rc.py` config file
+                        contains interpreted Python code, so conditionals can be set for different
+                        use-cases.  This option allows one to set a string value from the command
+                        line which can then be used to choose a case in the config file.  To set
+                        such a variable, pass the value to this option.  The default value is
+                        the string "default".  To access this variable, use
+                        `from recdroidvid import config_conditional` at the top of the config
+                        file.
+                        """)
+
+    # Set the variable for the `--config-conditional` option, based ONLY on cmdline args.
+    parsed_cmdline_only_args = parser.parse_args()
+    import recdroidvid as rdv
+    if parsed_cmdline_only_args.config_conditional:
+        rdv.config_conditional = parsed_cmdline_only_args.config_conditional[0]
+    else:
+        rdv.config_conditional = "default"
+
+    # Now parse the commandline again, with the combined config args and cmdline args.
     rc_file_args = read_python_rc_file()
     #rc_file_args = read_rc_file()
     combined_args = rc_file_args + sys.argv[1:]
-    cmdline_args = parser.parse_args(args=combined_args)
+    parsed_args = parser.parse_args(args=combined_args)
 
-    args_list.clear() # Reset the args_list to contain the parsed args object.
-    args_list.append(cmdline_args)
+    # Reset the module-scope list args_list to contain the parsed args object (where the
+    # `args()` function will be able to access it).
+    args_list.clear()
+    args_list.append(parsed_args)
 
-    return cmdline_args
+    return parsed_args
 
 #def read_rc_file():
 #    """Read and parse the ~/.recdroidvid_rc file."""
@@ -269,7 +300,7 @@ def read_python_rc_file():
         try:
             rc_options_module = __import__(module_name)
         except ImportError:
-            print("\n\nERROR: RC file at '{rc_path}' raised an error on import:\n\n",
+            print(f"\n\nERROR: RC file at '{rc_path}' raised an error on import:\n\n",
                   file=sys.stderr)
             raise
         finally:
