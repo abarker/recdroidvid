@@ -66,10 +66,14 @@ USE_SCREENRECORD = False # DEPRECATED.
 POSTPROCESS_VIDEOS = False
 POSTPROCESSING_CMD = [] # Enter cmd as separate string arguments.
 
+RECDROIDVID_PYTHON_RC_FILENAME = ".recdroidvid_rc.py"
+
 import sys
 import os
 import argparse
-import ast
+#import ast
+import shutil
+import tempfile
 
 args_list = [] # A mutable container to hold the parsed arguments.
 
@@ -213,7 +217,8 @@ def parse_command_line():
                         OpenCamera package name.  Look in the URL of the app's PlayStore
                         web site to find this string.""")
 
-    rc_file_args = read_rc_file()
+    rc_file_args = read_python_rc_file()
+    #rc_file_args = read_rc_file()
     combined_args = rc_file_args + sys.argv[1:]
     cmdline_args = parser.parse_args(args=combined_args)
 
@@ -222,28 +227,53 @@ def parse_command_line():
 
     return cmdline_args
 
-def read_rc_file():
-    """Read and parse the ~/.recdroidvid_rc file."""
-    rc_path = os.path.abspath(os.path.expanduser("~/.recdroidvid_rc"))
+#def read_rc_file():
+#    """Read and parse the ~/.recdroidvid_rc file."""
+#    rc_path = os.path.abspath(os.path.expanduser("~/.recdroidvid_rc"))
+#    if not os.path.isfile(rc_path):
+#        return []
+#
+#    with open(rc_path, "r", encoding="utf-8") as f:
+#        text = f.read()
+#
+#    try:
+#        args_list = ast.literal_eval("[" + text + "]")
+#    except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError) as e:
+#        print(f"\nError parsing ~/.recdroidvid_rc:\n   ", e, file=sys.stderr)
+#        print("\nExiting.")
+#        sys.exit()
+#
+#    for a in args_list: # Make sure everything evaluated as a string.
+#        if not isinstance(a, str):
+#            print(f"\nError parsing ~/.recdroidvid_rc: The option or value '{a}' is not "
+#                    "a quoted string.", file=sys.stderr)
+#            print("\nExiting.")
+#            sys.exit(1)
+#
+#    return args_list
+
+def read_python_rc_file():
+    """Read and parse the ~/.recdroidvid_rc.py file."""
+    rc_path = os.path.abspath(os.path.join(os.path.expanduser("~"),
+                              RECDROIDVID_PYTHON_RC_FILENAME))
     if not os.path.isfile(rc_path):
         return []
 
-    with open(rc_path, "r", encoding="utf-8") as f:
-        text = f.read()
+    module_filename = RECDROIDVID_PYTHON_RC_FILENAME[1:] # Remove the dot.
+    module_name = RECDROIDVID_PYTHON_RC_FILENAME[1:-3] # Remove the dot and .py extension.
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        shutil.copyfile(rc_path,
+                os.path.join(tmpdirname, module_filename))
+        sys.path.insert(1, tmpdirname)
 
-    try:
-        args_list = ast.literal_eval("[" + text + "]")
-    except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError) as e:
-        print(f"\nError parsing ~/.recdroidvid_rc:\n   ", e, file=sys.stderr)
-        print("\nExiting.")
-        sys.exit()
+        try:
+            rc_options_module = __import__(module_name)
+        except ImportError:
+            print("\n\nERROR: RC file at '{rc_path}' raised an error on import:\n\n",
+                  file=sys.stderr)
+            raise
+        finally:
+            del sys.path[1]
 
-    for a in args_list: # Make sure everything evaluated as a string.
-        if not isinstance(a, str):
-            print(f"\nError parsing ~/.recdroidvid_rc: The option or value '{a}' is not "
-                    "a quoted string.", file=sys.stderr)
-            print("\nExiting.")
-            sys.exit(1)
-
-    return args_list
+    return rc_options_module.rdv_options
 
