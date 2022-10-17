@@ -4,11 +4,16 @@ reddroidvid
 ===========
 
 Monitor and record video from Android devices remotely, pulling, renaming, and
-optionally previewing the videos when recording stops.
+optionally previewing the videos when recording stops.  Has very basic integration
+capability with DAW software (Ardour is currently the default setting).
 
-Currently only works over USB (via ADB).  Only tested with OpenCamera on
-Android controlled from Linux.  (Windows should work in principle, but there
-are some Linux-specific commands that would need to be replaced.)
+Currently only works over USB (via the ADB interface).  Only tested with
+OpenCamera on Android, controlled from Linux.  (Windows could work in
+principle, but there are various Linux-specific commands which would need to be
+replaced.) No attempt is made to unlock a locked phone.
+
+Disclaimer:  This is beta-level software that works for what I need it to do.
+It is, however, written fairly generally to be customizable.
 
 Installation
 ============
@@ -28,11 +33,12 @@ scrcpy
 ------
 
 The scrcpy program needs to be installed and set up to be runnable via USB.  It
-functions as the computer-screen monitor for what is being recorded on the phone.
-The program is available in many linux repos, or can be compiled from the scrcpy
-site (https://github.com/Genymobile/scrcpy).
+functions as the computer-screen monitor for what is being recorded on the
+phone.  (All the actual recording is done on the phone, however.) The program
+is available in many linux repos, or can be compiled from the scrcpy site
+at https://github.com/Genymobile/scrcpy.
 
-On Ubuntu the command using apt is:
+On Ubuntu the command to install from the repos is:
 
 .. code-block:: bash
 
@@ -86,8 +92,11 @@ Options and Customization
 .. In vim use this to get output:
        :read !recdroidvid -h
 
-To see the command-line options, run ``recdroidvid --help | more``.
-The output of that command follows.
+To see the command-line options, run ``recdroidvid --help | more``.  The output
+of that command follows.  Note that any options can also be set in the config
+file `~/.recdroidvid_rc.py`.  The file will be imported and the strings on the
+list `rdv_options` will be used as the default command-line options.  See the
+example config file.
 
    usage: recdroidvid [-h] [--scrcpy-cmd CMD-STRING] [--numbering-start INTEGER]
                       [--loop] [--autorecord] [--preview-video]
@@ -100,25 +109,30 @@ The output of that command follows.
                       [--add-daw-mark-cmd CMD-STRING]
                       [--raise-daw-on-camera-app-open]
                       [--raise-daw-on-transport-toggle]
-                      [--raise-daw-to-top-cmd CMD-STRING] [--audio-extract]
+                      [--raise-daw-to-top-cmd CMD-STRING]
+                      [--is-daw-running-cmd CMD-STRING] [--audio-extract]
                       [--camera-save-dir DIRPATH]
                       [--camera-package-name PACKAGENAME]
+                      [--config-conditional STRING]
                       [PREFIXSTRING]
-   
-   Record a video on mobile via ADB and pull result.
-   
+
+   Record a video on mobile via ADB and pull result. All config options can be
+   set in a file `.recdroidvid_rc.py`. The file is evaluated and the list
+   `rdv_options` in the file is used as the options list. See the example config
+   file.
+
    positional arguments:
      PREFIXSTRING          The basename or prefix of the pulled video file.
                            Whether name or prefix depends on the method used to
                            record.
-   
+
    optional arguments:
      -h, --help            show this help message and exit
      --scrcpy-cmd CMD-STRING, -y CMD-STRING
                            The command, including arguments, to be used to launch
                            the scrcpy program. Otherwise a default version is
                            used with some common arguments. Note that the string
-                           `--window-title=RDB_SCRCPY-TITLE` can be used to
+                           `--window-title=RDV_SCRCPY_TITLE` can be used to
                            substitute-in a more descriptive title for the window.
      --numbering-start INTEGER, -n INTEGER
                            The number at which to start numbering pulled videos.
@@ -141,11 +155,17 @@ The output of that command follows.
                            the mpv program.
      --preview-video-cmd CMD-STRING
                            The command used to invoke a movie player to view the
-                           preview. The default uses the mpv movie viewer.
+                           preview. The default uses the mpv movie viewer. The
+                           string 'RDV_PREVIEW_FILENAME', if present in the
+                           command, will be replaced with the title of the video
+                           being previewed.
      --preview-video-cmd-jack CMD-STRING
                            The command used to invoke a movie player to view the
                            preview when the jack audio system is detected to be
-                           running. The default uses the mpv movie viewer.
+                           running. The default uses the mpv movie viewer. The
+                           string 'RDV_PREVIEW_FILENAME', if present in the
+                           command, will be replaced with the title of the video
+                           being previewed.
      --date-and-time-in-video-name, -t
                            Include the date and time in the video names in a
                            readable format.
@@ -180,6 +200,10 @@ The output of that command follows.
                            `--raise_daw_on_camera_app_open` or `--raise-daw-on-
                            transport-toggle` options are selected. The default
                            uses xdotool to activate any Ardour windows.
+     --is-daw-running-cmd CMD-STRING
+                           A system command to test if the DAW is actually
+                           running. A zero return code means it is, and a nonzero
+                           return code means it isn't.
      --audio-extract, -w   Extract a separate audio file (currently always a WAV
                            file) from each video.
      --camera-save-dir DIRPATH, -d DIRPATH
@@ -192,3 +216,13 @@ The output of that command follows.
                            to "net.sourceforge.opencamera", the OpenCamera
                            package name. Look in the URL of the app's PlayStore
                            web site to find this string.
+     --config-conditional STRING
+                           The `.recdroidvid_rc.py` config file contains
+                           interpreted Python code, so conditionals can be set
+                           for different use-cases. This option allows one to set
+                           a string value from the command line which can then be
+                           used to choose a case in the config file. To set such
+                           a variable, pass the value to this option. The default
+                           value is the string "default". To access this
+                           variable, use `from recdroidvid import
+                           config_conditional` at the top of the config file.
