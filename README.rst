@@ -18,7 +18,7 @@ It is, however, written fairly generally to be customizable.
 Screenshot of the program being used to record music a performance:
 
 .. image:: https://github.com/abarker/recdroidvid/blob/main/doc/rdv_screenshot_example.png
-    :width: 350px
+    :width: 500px
     :align: center
     :alt: [screenshot of recdroidvid in action]
 
