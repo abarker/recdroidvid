@@ -17,10 +17,10 @@ It is, however, written fairly generally to be customizable.
 
 Screenshot of the program being used to record music a performance:
 
-.. image:: https://github.com/abarker/recdroidvid/doc/rdv_screenshot_example.png
+.. image:: https://github.com/abarker/recdroidvid/blob/main/doc/rdv_screenshot_example.png
     :width: 350px
     :align: center
-    :alt: [GIF of pdfCropMargins]
+    :alt: [screenshot of recdroidvid in action]
 
 Installation
 ============
