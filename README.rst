@@ -15,7 +15,8 @@ replaced.) No attempt is made to unlock a locked phone.
 Disclaimer:  This is beta-level software that works for what I need it to do.
 It is, however, written fairly generally to be customizable.
 
-Screenshot of the program being used to record music a performance:
+Screenshot of the program being used to record music a performance (along with
+the Ardour DAW and Hydrogen drums):
 
 .. image:: https://github.com/abarker/recdroidvid/blob/main/doc/rdv_screenshot_example.png
     :width: 500px
