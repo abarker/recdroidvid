@@ -1,6 +1,6 @@
 .. default-role:: code
 
-reddroidvid
+recdroidvid
 ===========
 
 Monitor and record video from Android devices remotely, pulling, renaming, and
