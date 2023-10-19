@@ -55,8 +55,10 @@ RAISE_DAW_TO_TOP_CMD = "xdotool search --onlyvisible --class Ardour windowactiva
 
 SYNC_DAW_SLEEP_TIME = 4 # Lag between video on/off & DAW transport sync (load/time tradeoff)
 
-#RECORD_DETECTION_METHOD = "directory size increasing" # More general but requires two calls.
-RECORD_DETECTION_METHOD = ".pending filename prefix" # May be specific to OpenCamera implemetation.
+RECORD_DETECTION_METHOD = "directory size increasing" # More general but requires two calls.
+# Below started failing, starting on open before video actually started... was a .pending file
+# there from before, might be related...
+#RECORD_DETECTION_METHOD = ".pending filename prefix" # May be specific to OpenCamera implemetation.
 
 # This option records with the ADB screenrecord command.  It is limited to the
 # screen's resolution(?) and 3 minutes, with no sound.  It is no longer tested
@@ -131,15 +133,21 @@ def parse_command_line():
                         prefix and defaults to 1.  Allows for restarting and continuing
                         a naming sequence across invocations of the program.""")
 
-    parser.add_argument("--loop", "-l", action="store_true",
-                        default=False, help="""Loop the recording, querying between
-                        invocations of `scrcpy` as to whether or not to continue.  This
-                        allows for shutting down the scrcpy display to save both
-                        local CPU and remote device memory (videos are downloaded and
-                        deleted from the device at the end of each loop), but then
-                        restarting with the same options.  Video numbering (as
-                        included in the filename) is automatically incremented over
-                        all the videos, across loops.""")
+    parser.add_argument("--loop", "-l", action="store_true", help="""
+                        Loop the recording, querying between invocations of `scrcpy` as to
+                        whether or not to continue.  This allows for shutting down the
+                        scrcpy display to save both local CPU and remote device memory
+                        (videos are downloaded and deleted from the device at the end of
+                        each loop), but then restarting with the same options.  Video
+                        numbering (as included in the filename) is automatically incremented
+                        over all the videos, across loops.""")
+
+    parser.add_argument("--wait-loop", "-w", action="store_true", help="""
+                        The '--loop' option always starts the scrcpy video monitor
+                        immediately on the first loop.  This option delays the action until
+                        the user responds to a query.  This avoids the CPU cost of scrcpy if
+                        you are not planning to start video recording right away.  This
+                        option implies the '--loop' option.""")
 
     parser.add_argument("--autorecord", "-a", action="store_true",
                         default=False, help="""Automatically start recording when the scrcpy
@@ -179,7 +187,7 @@ def parse_command_line():
                         default uses xdotool to send a space-bar character to Ardour.""")
 
     parser.add_argument("--add-daw-mark-on-transport-start", "-m", action="store_true",
-                        default=False, help="""Whether to add a mark in the DAW when the
+                        help="""Whether to add a mark in the DAW when the
                         transport starts, to help in syncing with the video.""")
 
     parser.add_argument("--add-daw-mark-cmd", type=str, nargs=1, metavar="CMD-STRING",
@@ -188,7 +196,7 @@ def parse_command_line():
                         a tab character to Ardour.""")
 
     parser.add_argument("--raise-daw-on-camera-app-open", "-q", action="store_true",
-                        default=False, help="""Raise the DAW to the top
+                        help="""Raise the DAW to the top
                         of the window stack when the camara app is opened on the mobile device.
                         Works well when scrcpy is also passed the `--always-on-top` option.""")
 
@@ -210,7 +218,7 @@ def parse_command_line():
                         the DAW is actually running.  A zero return code means it is, and
                         a nonzero return code means it isn't.""")
 
-    parser.add_argument("--audio-extract", "-w", action="store_true", default=False,
+    parser.add_argument("--audio-extract", "-e", action="store_true", default=False,
                         help="""Extract a separate audio file (currently always a WAV file)
                         from each video.""")
 
@@ -250,6 +258,9 @@ def parse_command_line():
     #rc_file_args = read_rc_file()
     combined_args = rc_file_args + sys.argv[1:]
     parsed_args = parser.parse_args(args=combined_args)
+
+    if parsed_args.wait_loop: # The wait-loop option implies loop.
+        parsed_args.loop = True
 
     # Reset the module-scope list args_list to contain the parsed args object (where the
     # `args()` function will be able to access it).

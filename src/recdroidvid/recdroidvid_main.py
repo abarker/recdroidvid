@@ -20,6 +20,8 @@ Currently requires these programs to be installed:
 
 VERSION = "0.1.0"
 
+DEBUG = True
+
 import sys
 import os
 from time import sleep
@@ -35,6 +37,7 @@ from .settings_and_options import (parse_command_line, args, DETECT_JACK_CMD,
 
 from .utility_functions import query_yes_no, indent_lines, run_local_cmd_blocking
 from . import adb_commands as adb
+from .adb_commands import ADBException
 
 #
 # Local machine startup functions.
@@ -81,7 +84,9 @@ def is_daw_running():
     returncode, stdout, stderr = run_local_cmd_blocking(args().is_daw_running_cmd[0],
                                                                fail_on_nonzero_exit=False)
     if returncode != 0:
+        if DEBUG: print(f"\nDEBUG: DAW not detected as running.")
         return False
+    if DEBUG: print(f"\nDEBUG: DAW detected as running.")
     return True
 
 def toggle_daw_transport():
@@ -129,12 +134,14 @@ def sync_daw_transport_bg_process(stop_flag_fun):
     while True:
         vid_recording = video_is_recording_on_device()
         if not daw_transport_rolling and vid_recording: # Start DAW recording transport.
+            if DEBUG: print(f"\n{daw_transport_rolling=}   {vid_recording=}")
             print("\nStarting (toggling) DAW transport.")
             if args().add_daw_mark_on_transport_start:
                 add_mark_in_daw()
             toggle_daw_transport() # Later could be a "start transport" cmd.
             daw_transport_rolling = True
         if daw_transport_rolling and not vid_recording: # Stop DAW recording transport.
+            if DEBUG: print(f"\n{daw_transport_rolling=}   {vid_recording=}")
             print("\nStopping (toggling) DAW transport.")
             toggle_daw_transport() # Later could be a "stop transport" cmd.
             daw_transport_rolling = False
@@ -373,7 +380,8 @@ def print_info_about_pulled_video(video_path):
 
 def startup_device_and_run(video_start_number):
     """Main script functionality."""
-    adb.device_sleep() # Get a consistent starting state for repeatability.
+    # Note first adb call must raise exception, not just call sys.exit.
+    adb.device_sleep(exit_on_error=False) # Get a consistent starting state for repeatability.
     adb.device_wakeup()
     adb.unlock_screen()
     adb.open_video_camera()
@@ -401,9 +409,25 @@ def main():
     print_startup_message()
 
     count = 0
+    device_found = True
     while True:
+        if device_found == False or count == 0 and args().wait_loop:
+            cont = query_yes_no(f"\nRecdroidvid wait loop, continue?"
+                                f" [ynq enter=y]: ", empty_default="y")
+            device_found = True
+            if not cont:
+                print("\nExiting recdroidvid.")
+                return
         count += 1
-        video_end_number = startup_device_and_run(video_start_number)
+
+        # Loop until device is detected.
+        try:
+            video_end_number = startup_device_and_run(video_start_number)
+        except ADBException:
+            count -= 1
+            device_found = False
+            continue
+
         video_start_number = video_end_number + 1
         if not args().loop:
             break
@@ -411,7 +435,6 @@ def main():
                             f" [ynq enter=y]: ", empty_default="y")
         if not cont:
             break
-
     print("\nExiting recdroidvid.")
 
 if __name__ == "__main__":

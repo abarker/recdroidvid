@@ -9,7 +9,7 @@ from time import sleep
 from .settings_and_options import args
 from .utility_functions import run_local_cmd_blocking
 
-def adb(cmd, *, print_cmd=True):
+def adb(cmd, *, print_cmd=True, exit_on_error=True):
     """Run the ADB command, printing out diagnostics.  Setting `return_output`
     returns the stdout of the command, but the command must be redirectable to
     a temp file.  Returned string is a direct read, with no splitting."""
@@ -18,12 +18,18 @@ def adb(cmd, *, print_cmd=True):
                                                         fail_on_nonzero_exit=False)
     if stderr.startswith("error: no devices"):
         print("\nERROR: No devices found, is the phone plugged in via USB?", file=sys.stderr)
-        sys.exit(1)
+        if exit_on_error:
+            sys.exit(1)
+        else:
+            raise ADBException("No devices found.")
     elif returncode != 0:
         print(f"\nERROR: ADB command '{cmd}' returned nonzero exit status '{returncode}'."
                 f"\nThe command's output follows:\n{stdout}\n{stderr}",
                 file=sys.stderr)
-        sys.exit(1)
+        if exit_on_error:
+            sys.exit(1)
+        else:
+            raise ADBException("Command returned nonzero exit status.")
     return stdout, stderr
 
 def ls(path, also_hidden=False, extension_whitelist=None, print_cmd=True):
@@ -67,9 +73,9 @@ def device_wakeup():
     stdout, stderr = adb(f"adb shell input keyevent KEYCODE_WAKEUP")
     sleep(2)
 
-def device_sleep():
+def device_sleep(exit_on_error=True):
     """Issue an ADB sleep command."""
-    stdout, stderr = adb(f"adb shell input keyevent KEYCODE_SLEEP")
+    stdout, stderr = adb(f"adb shell input keyevent KEYCODE_SLEEP", exit_on_error=False)
     sleep(2)
 
 def unlock_screen():
@@ -113,3 +119,5 @@ def pending_video_file_exists(dirname):
     files = ls(dirname, also_hidden=True, print_cmd=False)
     return any(f.startswith(".pending") for f in files)
 
+class ADBException(Exception):
+    pass
