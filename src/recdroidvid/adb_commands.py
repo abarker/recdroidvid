@@ -75,7 +75,7 @@ def device_wakeup():
 
 def device_sleep(exit_on_error=True):
     """Issue an ADB sleep command."""
-    stdout, stderr = adb(f"adb shell input keyevent KEYCODE_SLEEP", exit_on_error=False)
+    stdout, stderr = adb(f"adb shell input keyevent KEYCODE_SLEEP", exit_on_error=exit_on_error)
     sleep(2)
 
 def unlock_screen():
