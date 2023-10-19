@@ -428,7 +428,6 @@ def main():
             device_found = False
             continue
 
-        print(args().loop)
         video_start_number = video_end_number + 1
         if not args().loop:
             break

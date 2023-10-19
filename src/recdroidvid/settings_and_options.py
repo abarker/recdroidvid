@@ -257,19 +257,15 @@ def parse_command_line():
     rc_file_args = read_python_rc_file()
     #rc_file_args = read_rc_file()
     combined_args = rc_file_args + sys.argv[1:]
-    print(combined_args)
     parsed_args = parser.parse_args(args=combined_args)
 
-    print("parsed_args.loop", parsed_args.loop)
     if parsed_args.wait_loop: # The wait-loop option implies loop.
-        print("wait_loop is True")
         parsed_args.loop = True
 
     # Reset the module-scope list args_list to contain the parsed args object (where the
     # `args()` function will be able to access it).
     args_list.clear()
     args_list.append(parsed_args)
-    print("loop in parse_arts:", args().loop)
 
     return parsed_args
 
