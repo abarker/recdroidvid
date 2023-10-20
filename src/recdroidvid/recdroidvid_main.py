@@ -28,6 +28,7 @@ from time import sleep
 import subprocess
 import datetime
 import threading
+from .utility_functions import print_info, print_error, print_warning
 
 from .settings_and_options import (parse_command_line, args, DETECT_JACK_CMD,
                 USE_SCREENRECORD, RECORD_DETECTION_METHOD, SYNC_DAW_SLEEP_TIME,
@@ -45,9 +46,9 @@ from .adb_commands import ADBException
 
 def print_startup_message():
     """Print out the initial greeting message."""
-    print(f"{'='*78}")
-    print(f"\nrecdroidvid, version {VERSION}")
-    print(f"\n{'='*78}")
+    print_info(f"{'='*78}")
+    print_info(f"\nrecdroidvid, version {VERSION}")
+    print_info(f"\n{'='*78}")
 
 def detect_if_jack_running():
     """Determine if the Jack audio system is currently running; return true if it is."""
@@ -71,12 +72,12 @@ def detect_if_jack_running():
 
 def raise_daw_in_window_stack():
     """Run the command to raise the DAW in the window stack."""
-    print("\nRaising DAW to top of Window stack:", args().raise_daw_to_top_cmd[0])
+    print_info("\nRaising DAW to top of Window stack:", args().raise_daw_to_top_cmd[0])
     # Allow the command to fail, but issue a warning.
     returncode, stdout, stderr = run_local_cmd_blocking(args().raise_daw_to_top_cmd[0],
                                                         fail_on_nonzero_exit=False)
     if returncode != 0:
-        print("\nWARNING: Nonzero exit status running the raise-DAW command.", file=sys.stderr)
+        print_warning("\nWARNING: Nonzero exit status running the raise-DAW command.", file=sys.stderr)
     return returncode
 
 def is_daw_running():
@@ -92,23 +93,23 @@ def is_daw_running():
 def toggle_daw_transport():
     """Toggle the transport state of the DAW.  Used to sync with recording."""
     if not is_daw_running():
-        print("WARNING: DAW is not detected as running, not toggling transport.",
+        print_warning("WARNING: DAW is not detected as running, not toggling transport.",
                 file=sys.stderr)
         return
-    print("\nToggle DAW transport cmd:", args().toggle_daw_transport_cmd[0])
+    print_info("\nToggle DAW transport cmd:", args().toggle_daw_transport_cmd[0])
     returncode, stdout, stderr = run_local_cmd_blocking(args().toggle_daw_transport_cmd[0],
                                                                fail_on_nonzero_exit=False)
     if returncode !=0:
-        print("WARNING: Nonzero exit status running the toggle-daw command.", file=sys.stderr)
+        print_warning("WARNING: Nonzero exit status running the toggle-daw command.", file=sys.stderr)
     if args().raise_daw_on_transport_toggle:
         raise_returncode = raise_daw_in_window_stack()
 
 def add_mark_in_daw():
     """Create a new mark in the DAW when recording is started."""
     if not is_daw_running():
-        print("WARNING: DAW is not detected as running, not adding a mark.", file=sys.stderr)
+        print_warning("WARNING: DAW is not detected as running, not adding a mark.", file=sys.stderr)
         return
-    print(f"\nAdding a new mark in the DAW: {args().add_daw_mark_cmd[0]}")
+    print_info(f"\nAdding a new mark in the DAW: {args().add_daw_mark_cmd[0]}")
     run_local_cmd_blocking(args().add_daw_mark_cmd[0])
 
 sync_daw_stop_flag = False # Flag to signal the DAW sync thread to stop.
@@ -122,7 +123,7 @@ def video_is_recording_on_device():
     if RECORD_DETECTION_METHOD == ".pending filename prefix":
         return adb.pending_video_file_exists(args().camera_save_dir[0])
 
-    print(f"Error in recdroidvid setting: Unrecognized RECORD_DETECTION_METHOD:"
+    print_error(f"Error in recdroidvid setting: Unrecognized RECORD_DETECTION_METHOD:"
           f"\n   '{RECORD_DETECTION_METHOD}'", file=sys.stderr)
     sys.exit(1)
 
@@ -135,14 +136,14 @@ def sync_daw_transport_bg_process(stop_flag_fun):
         vid_recording = video_is_recording_on_device()
         if not daw_transport_rolling and vid_recording: # Start DAW recording transport.
             if DEBUG: print(f"\n{daw_transport_rolling=}   {vid_recording=}")
-            print("\nStarting (toggling) DAW transport.")
+            print_info("\nStarting (toggling) DAW transport.")
             if args().add_daw_mark_on_transport_start:
                 add_mark_in_daw()
             toggle_daw_transport() # Later could be a "start transport" cmd.
             daw_transport_rolling = True
         if daw_transport_rolling and not vid_recording: # Stop DAW recording transport.
-            if DEBUG: print(f"\n{daw_transport_rolling=}   {vid_recording=}")
-            print("\nStopping (toggling) DAW transport.")
+            if DEBUG: print_info(f"\n{daw_transport_rolling=}   {vid_recording=}")
+            print_info("\nStopping (toggling) DAW transport.")
             toggle_daw_transport() # Later could be a "stop transport" cmd.
             daw_transport_rolling = False
         if stop_flag_fun():
@@ -249,7 +250,7 @@ def start_monitoring_and_button_push_recording():
         #if args().sync_daw_transport_with_video_recording: # Now BG thread is still running to stop DAW transport.
         #    toggle_daw_transport() # Presumably the DAW transport is still rolling.
         while adb.directory_size_increasing(args().camera_save_dir[0]):
-            print("Waiting for save directory to stop increasing in size...")
+            print_info("Waiting for save directory to stop increasing in size...")
             sleep(1)
 
     if args().sync_daw_transport_with_video_recording:
@@ -288,7 +289,7 @@ def monitor_record_and_pull_videos(video_start_number):
         pulled_vid = pull_and_delete_file(vid) # Note file always written to CWD for now.
         sleep(0.3)
         new_vid_name = generate_video_name(count+video_start_number, pulled_vid)
-        print(f"\nSaving (renaming) video file as\n   {new_vid_name}")
+        print_info(f"\nSaving (renaming) video file as\n   {new_vid_name}")
         os.rename(pulled_vid, new_vid_name)
         new_video_paths.append(new_vid_name)
     return new_video_paths
@@ -320,12 +321,12 @@ def preview_video(video_path):
     if QUERY_PREVIEW_VIDEO and not query_yes_no("\nRun preview? "):
         return
 
-    print("\nRunning preview...")
+    print_info("\nRunning preview...")
     if detect_if_jack_running():
-        print("\nDetected jack audio running.")
+        print_info("\nDetected jack audio running.")
         preview_cmd = args().preview_video_cmd_jack[0] + f" {video_path}"
     else:
-        print("\nDid not detect jack audio running.")
+        print_info("\nDid not detect jack audio running.")
         preview_cmd = args().preview_video_cmd[0] + f" {video_path}"
 
     run_local_cmd_blocking(preview_cmd, print_cmd=True, capture_output=False,
@@ -346,12 +347,12 @@ def extract_audio_from_video(video_path):
     dirname, basename = os.path.split(video_path)
     root_name, video_extension = os.path.splitext(basename)
     output_audio_path = os.path.join(dirname, root_name + EXTRACTED_AUDIO_EXTENSION)
-    print(f"\nExtracting audio to file: '{output_audio_path}'")
+    print_info(f"\nExtracting audio to file: '{output_audio_path}'")
     # https://superuser.com/questions/609740/extracting-wav-from-mp4-while-preserving-the-highest-possible-quality
     cmd = f"ffmpeg -i {video_path} -map 0:a {output_audio_path} -loglevel quiet"
     run_local_cmd_blocking(cmd, print_cmd=True, print_cmd_prefix="SYSTEM: ",
                            capture_output=False)
-    print("\nAudio extracted.")
+    print_info("\nAudio extracted.")
 
 def postprocess_video_file(video_path):
     """Run a postprocessing algorithm on the video file at `video_path`."""
@@ -368,7 +369,7 @@ def print_info_about_pulled_video(video_path):
     cmd = (f"ffprobe -pretty -show_format -v error -show_entries"
            f" stream=codec_name,width,height,duration,size,bit_rate"
            f" -of default=noprint_wrappers=1 {video_path} | grep -v 'TAG:'")
-    print("\nRunning ffprobe on saved video file:")
+    print_info("\nRunning ffprobe on saved video file:")
     stdout, stderr = run_local_cmd_blocking(cmd)
     print(indent_lines(stdout, 4))
     if stderr:
@@ -392,7 +393,7 @@ def startup_device_and_run(video_start_number):
     adb.device_sleep() # Put the device to sleep after use.
 
     for vid in video_paths:
-        print(f"\n{'='*12} {vid} {'='*30}")
+        print_info(f"\n{'='*12} {vid} {'='*30}")
         print_info_about_pulled_video(vid)
         preview_video(vid)
         extract_audio_from_video(vid)
@@ -416,7 +417,7 @@ def main():
                                 f" [ynq enter=y]: ", empty_default="y")
             device_found = True
             if not cont:
-                print("\nExiting recdroidvid.")
+                print_info("\nExiting recdroidvid.")
                 return
         count += 1
 
@@ -435,7 +436,7 @@ def main():
                             f" [ynq enter=y]: ", empty_default="y")
         if not cont:
             break
-    print("\nExiting recdroidvid.")
+    print_info("\nExiting recdroidvid.")
 
 if __name__ == "__main__":
 

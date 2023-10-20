@@ -7,7 +7,7 @@ Commands calling the Android Debug Bridge (ADB) to the moblie device.
 import sys
 from time import sleep
 from .settings_and_options import args
-from .utility_functions import run_local_cmd_blocking
+from .utility_functions import run_local_cmd_blocking, print_error
 
 def adb(cmd, *, print_cmd=True, exit_on_error=True):
     """Run the ADB command, printing out diagnostics.  Setting `return_output`
@@ -17,13 +17,13 @@ def adb(cmd, *, print_cmd=True, exit_on_error=True):
                                                         print_cmd_prefix="ADB: ",
                                                         fail_on_nonzero_exit=False)
     if stderr.startswith("error: no devices"):
-        print("\nERROR: No devices found, is the phone plugged in via USB?", file=sys.stderr)
+        print_error("\nERROR: No devices found, is the phone plugged in via USB?", file=sys.stderr)
         if exit_on_error:
             sys.exit(1)
         else:
             raise ADBException("No devices found.")
     elif returncode != 0:
-        print(f"\nERROR: ADB command '{cmd}' returned nonzero exit status '{returncode}'."
+        print_error(f"\nERROR: ADB command '{cmd}' returned nonzero exit status '{returncode}'."
                 f"\nThe command's output follows:\n{stdout}\n{stderr}",
                 file=sys.stderr)
         if exit_on_error:

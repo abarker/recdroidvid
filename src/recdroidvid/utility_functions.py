@@ -6,6 +6,50 @@ Simple utility functions used in multiple modules.
 
 import sys
 import subprocess
+from colorama import init, Fore, Back, Style
+
+# Available formatting constants are:
+#
+# Fore: BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE, RESET.
+# Back: BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE, RESET.
+# Style: DIM, NORMAL, BRIGHT, RESET_ALL
+#
+# Style.RESET_ALL
+# print(Fore.BLUE + 'some blue text')
+# print(Fore.RED + 'some red text')
+# print(Back.GREEN + 'and with a green background')
+# print(Style.DIM + 'and in dim text')
+# print(Style.RESET_ALL)
+# print('back to normal now')
+
+init(autoreset=True) # To avoid printing Style.RESET_ALL to clear.
+
+def print_color(color, *args, **kwargs):
+    """Generic color printing."""
+    print(color, sep="", end="")
+    args = list(args)
+    args[0] = color + args[0]
+    print(*args, **kwargs)
+
+def print_info(*args, **kwargs):
+    """Print out an ADB command with colorama coloring."""
+    print_color(Fore.GREEN, *args, **kwargs)
+
+def input_query(arg):
+    """Print out an ADB command with colorama coloring."""
+    return input(Fore.GREEN + arg)
+
+def print_adb_cmd(*args, **kwargs):
+    """Print out an ADB command with colorama coloring."""
+    print_color(Fore.BLUE, *args, **kwargs)
+
+def print_error(*args, **kwargs):
+    """Print out an ADB command with colorama coloring."""
+    print_color(Fore.RED, *args, **kwargs)
+
+def print_warning(*args, **kwargs):
+    """Print out an ADB command with colorama coloring."""
+    print_color(Fore.YELLOW, *args, **kwargs)
 
 def query_yes_no(query_string, empty_default=None):
     """Query the user for a yes or no response.  The `empty_default` value can
@@ -16,7 +60,7 @@ def query_yes_no(query_string, empty_default=None):
     quit_answers = {"q", "Q", "quit", "QUIT", "Quit"}
 
     while True:
-        response = input(query_string)
+        response = input_query(query_string)
         response = response.strip()
         if empty_default is not None and response == "":
             return empty_default
@@ -52,13 +96,13 @@ def run_local_cmd_blocking(cmd, *, print_cmd=False, print_cmd_prefix="", macro_d
 
     if print_cmd:
         cmd_string = "\n" + print_cmd_prefix + cmd_string
-        print(cmd_string)
+        print_adb_cmd(cmd_string)
 
     completed_process = subprocess.run(cmd, capture_output=capture_output, shell=shell,
                                        check=False, encoding="utf-8")
 
     if fail_on_nonzero_exit and completed_process.returncode != 0:
-        print("\nError, nonzero exit running system command, exiting...", file=sys.stderr)
+        print_error("\nError, nonzero exit running system command, exiting...", file=sys.stderr)
         sys.exit(1)
 
     if capture_output:

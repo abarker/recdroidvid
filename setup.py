@@ -25,7 +25,7 @@ setup(
     version="0.1.0", # major version, minor version, patch (see PEP440)
     description="Record and monitor video on android devices from computer (currently Linux via USB).",
     keywords=["android", "linux", "usb", "remote", "adb", "video", "movie", "record", "monitor"],
-    install_requires=["wheel"],
+    install_requires=["wheel", "colorama"],
     python_requires=">=3.6",
     entry_points = {
         "console_scripts": ["recdroidvid = recdroidvid.recdroidvid_main:main"]
