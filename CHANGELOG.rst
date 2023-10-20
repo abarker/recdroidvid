@@ -1,18 +1,17 @@
 History
 =======
 
-0.0.1 (2019-??-??)
+0.0.2 (2023-xx-xx)
 ------------------
 
 New features:
 
-* None.
+* New options to select.
 
-Changes:
+* Color printing of output added.
 
-* None
+0.0.1
+-----
 
-Bug fixes:
-
-* None
+First release.
 
