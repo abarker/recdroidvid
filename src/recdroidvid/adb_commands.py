@@ -9,11 +9,11 @@ from time import sleep
 from .settings_and_options import args
 from .utility_functions import run_local_cmd_blocking, print_error
 
-def adb(cmd, *, print_cmd=True, exit_on_error=True):
+def adb(cmd, *, print_cmd_str=True, exit_on_error=True):
     """Run the ADB command, printing out diagnostics.  Setting `return_output`
     returns the stdout of the command, but the command must be redirectable to
     a temp file.  Returned string is a direct read, with no splitting."""
-    returncode, stdout, stderr = run_local_cmd_blocking(cmd, print_cmd=print_cmd,
+    returncode, stdout, stderr = run_local_cmd_blocking(cmd, print_cmd_str=print_cmd_str,
                                                         print_cmd_prefix="ADB: ",
                                                         fail_on_nonzero_exit=False)
     if stderr.startswith("error: no devices"):
@@ -32,7 +32,7 @@ def adb(cmd, *, print_cmd=True, exit_on_error=True):
             raise ADBException("Command returned nonzero exit status.")
     return stdout, stderr
 
-def ls(path, also_hidden=False, extension_whitelist=None, print_cmd=True):
+def ls(path, also_hidden=False, extension_whitelist=None, print_cmd_str=True):
     """Run the ADB ls command and return the filenames time-sorted from oldest
     to newest.   If `all` is true the `-a` option to `ls` is used (which gets dotfiles
     too).  The `extension_whitelist` is an optional iterable of required file
@@ -40,9 +40,9 @@ def ls(path, also_hidden=False, extension_whitelist=None, print_cmd=True):
     # NOTE NOTE: `adb shell ls` is DIFFERENT FROM `adb ls`, you need also hidden files with
     # `shell adb` to get `.pending....mp4` files, and there are still a few more in `shell ls`.
     if also_hidden:
-        ls_list, ls_stderr = adb(f"adb shell ls -ctra {path}", print_cmd=print_cmd)
+        ls_list, ls_stderr = adb(f"adb shell ls -ctra {path}", print_cmd_str=print_cmd_str)
     else:
-        ls_list, ls_stderr = adb(f"adb shell ls -ctr {path}", print_cmd=print_cmd)
+        ls_list, ls_stderr = adb(f"adb shell ls -ctr {path}", print_cmd_str=print_cmd_str)
     ls_list = ls_list.splitlines()
 
     if extension_whitelist:
@@ -105,10 +105,10 @@ def directory_size_increasing(dirname, wait_secs=1):
     """Return true if the save directory is growing in size (i.e., file is being
     recorded there)."""
     DEBUG = False # Print commands to screen when debugging.
-    first_du, stderr = adb(f"adb shell du {dirname}", print_cmd=DEBUG)
+    first_du, stderr = adb(f"adb shell du {dirname}", print_cmd_str=DEBUG)
     first_du = first_du.split("\t")[0]
     sleep(wait_secs)
-    second_du, stderr = adb(f"adb shell du {dirname}", print_cmd=DEBUG)
+    second_du, stderr = adb(f"adb shell du {dirname}", print_cmd_str=DEBUG)
     second_du = second_du.split("\t")[0]
     return int(second_du) > int(first_du)
 
@@ -116,7 +116,7 @@ def pending_video_file_exists(dirname):
     """Return true if a filename starting with `.pending` is found in the directory.
     This is an implementation detail of OpenCamera, but can detect recording video
     in one call (unlike `directory_size_increasing`."""
-    files = ls(dirname, also_hidden=True, print_cmd=False)
+    files = ls(dirname, also_hidden=True, print_cmd_str=False)
     return any(f.startswith(".pending") for f in files)
 
 class ADBException(Exception):

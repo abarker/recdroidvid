@@ -76,6 +76,7 @@ import argparse
 #import ast
 import shutil
 import tempfile
+from .utility_functions import print_info, print_error, print_warning
 
 args_list = [] # A mutable container to hold the parsed arguments.
 
@@ -87,7 +88,7 @@ def args():
     # Do you always want to parse the command-line args, or just sometimes when main calls
     # `parse_command_line`?
     if not args_list:
-        print("ERROR: Command-line arguments have not been parsed.", file=sys.stderr)
+        print_error("ERROR: Command-line arguments have not been parsed.", file=sys.stderr)
         raise IndexError
     return args_list[0]
 
@@ -311,7 +312,7 @@ def read_python_rc_file():
         try:
             rc_options_module = __import__(module_name)
         except ImportError:
-            print(f"\n\nERROR: RC file at '{rc_path}' raised an error on import:\n\n",
+            print_error(f"\n\nERROR: RC file at '{rc_path}' raised an error on import:\n\n",
                   file=sys.stderr)
             raise
         finally:

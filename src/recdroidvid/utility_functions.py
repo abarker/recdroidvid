@@ -8,6 +8,10 @@ import sys
 import subprocess
 from colorama import init, Fore, Back, Style
 
+COLOR_PRINTING = True
+if COLOR_PRINTING:
+    init(autoreset=True) # To avoid printing Style.RESET_ALL to clear.
+
 # Available formatting constants are:
 #
 # Fore: BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE, RESET.
@@ -22,14 +26,15 @@ from colorama import init, Fore, Back, Style
 # print(Style.RESET_ALL)
 # print('back to normal now')
 
-init(autoreset=True) # To avoid printing Style.RESET_ALL to clear.
-
 def print_color(color, *args, **kwargs):
     """Generic color printing."""
-    print(color, sep="", end="")
-    args = list(args)
-    args[0] = color + args[0]
-    print(*args, **kwargs)
+    if not COLOR_PRINTING:
+        print(*args, **args)
+    else:
+        print(color, sep="", end="")
+        args = list(args)
+        args[0] = color + args[0]
+        print(*args, **kwargs)
 
 def print_info(*args, **kwargs):
     """Print out an ADB command with colorama coloring."""
@@ -37,9 +42,12 @@ def print_info(*args, **kwargs):
 
 def input_query(arg):
     """Print out an ADB command with colorama coloring."""
-    return input(Fore.GREEN + arg)
+    if COLOR_PRINTING:
+        return input(Fore.GREEN + arg)
+    else:
+        return input(arg)
 
-def print_adb_cmd(*args, **kwargs):
+def print_cmd(*args, **kwargs):
     """Print out an ADB command with colorama coloring."""
     print_color(Fore.BLUE, *args, **kwargs)
 
@@ -70,7 +78,7 @@ def query_yes_no(query_string, empty_default=None):
             return True
         return False # Must be a "no" or "quit" answer.
 
-def run_local_cmd_blocking(cmd, *, print_cmd=False, print_cmd_prefix="", macro_dict={},
+def run_local_cmd_blocking(cmd, *, print_cmd_str=False, print_cmd_prefix="", macro_dict={},
                            fail_on_nonzero_exit=True, capture_output=True):
     """Run a local system command.  If a string is passed in as `cmd` then
     `shell=True` is assumed.  If `macro_dict` is passed in then any dict key
@@ -94,9 +102,9 @@ def run_local_cmd_blocking(cmd, *, print_cmd=False, print_cmd_prefix="", macro_d
             cmd = [s.replace(key, value) for s in cmd]
         cmd_string = " ".join(cmd)
 
-    if print_cmd:
+    if print_cmd_str:
         cmd_string = "\n" + print_cmd_prefix + cmd_string
-        print_adb_cmd(cmd_string)
+        print_cmd(cmd_string)
 
     completed_process = subprocess.run(cmd, capture_output=capture_output, shell=shell,
                                        check=False, encoding="utf-8")

@@ -20,7 +20,7 @@ Currently requires these programs to be installed:
 
 VERSION = "0.1.0"
 
-DEBUG = True
+DEBUG = False
 
 import sys
 import os
@@ -49,6 +49,12 @@ def print_startup_message():
     print_info(f"{'='*78}")
     print_info(f"\nrecdroidvid, version {VERSION}")
     print_info(f"\n{'='*78}")
+
+def print_debug(*args, **kwargs):
+    """Print debugging message only if DEBUG is set true in module scope."""
+    # TODO: Maybe add a prefix option to print DEBUG first.
+    if DEBUG:
+        print(*args, **kwargs)
 
 def detect_if_jack_running():
     """Determine if the Jack audio system is currently running; return true if it is."""
@@ -85,9 +91,9 @@ def is_daw_running():
     returncode, stdout, stderr = run_local_cmd_blocking(args().is_daw_running_cmd[0],
                                                                fail_on_nonzero_exit=False)
     if returncode != 0:
-        if DEBUG: print(f"\nDEBUG: DAW not detected as running.")
+        print_debug(f"\nDEBUG: DAW not detected as running.")
         return False
-    if DEBUG: print(f"\nDEBUG: DAW detected as running.")
+    print_debug(f"\nDEBUG: DAW detected as running.")
     return True
 
 def toggle_daw_transport():
@@ -135,14 +141,14 @@ def sync_daw_transport_bg_process(stop_flag_fun):
     while True:
         vid_recording = video_is_recording_on_device()
         if not daw_transport_rolling and vid_recording: # Start DAW recording transport.
-            if DEBUG: print(f"\n{daw_transport_rolling=}   {vid_recording=}")
+            print_debug(f"\n{daw_transport_rolling=}   {vid_recording=}")
             print_info("\nStarting (toggling) DAW transport.")
             if args().add_daw_mark_on_transport_start:
                 add_mark_in_daw()
             toggle_daw_transport() # Later could be a "start transport" cmd.
             daw_transport_rolling = True
         if daw_transport_rolling and not vid_recording: # Stop DAW recording transport.
-            if DEBUG: print_info(f"\n{daw_transport_rolling=}   {vid_recording=}")
+            print_debug(f"\n{daw_transport_rolling=}   {vid_recording=}")
             print_info("\nStopping (toggling) DAW transport.")
             toggle_daw_transport() # Later could be a "stop transport" cmd.
             daw_transport_rolling = False
@@ -227,7 +233,7 @@ def start_screen_monitor():
     scrcpy_cmd = args().scrcpy_cmd[0]
 
     window_title_str = f"video file prefix: {args().video_file_prefix}"
-    run_local_cmd_blocking(scrcpy_cmd, print_cmd=True, print_cmd_prefix="SYSTEM: ",
+    run_local_cmd_blocking(scrcpy_cmd, print_cmd_str=True, print_cmd_prefix="SYSTEM: ",
                            macro_dict={"RDV_SCRCPY_TITLE": window_title_str},
                            capture_output=False)
 
@@ -329,11 +335,12 @@ def preview_video(video_path):
         print_info("\nDid not detect jack audio running.")
         preview_cmd = args().preview_video_cmd[0] + f" {video_path}"
 
-    run_local_cmd_blocking(preview_cmd, print_cmd=True, capture_output=False,
+    run_local_cmd_blocking(preview_cmd, print_cmd_str=True, capture_output=False,
+                       print_cmd_prefix="SYSTEM: ",
                        macro_dict={"RDV_PREVIEW_FILENAME": os.path.basename(video_path)})
 
     if PREVIEW_WINDOW_ALWAYS_ON_TOP:
-        run_local_cmd_blocking(SET_ACTIVE_WINDOW_ALWAYS_ON_TOP_CMD, print_cmd=True,
+        run_local_cmd_blocking(SET_ACTIVE_WINDOW_ALWAYS_ON_TOP_CMD, print_cmd_str=True,
                                capture_output=False)
 
 def extract_audio_from_video(video_path):
@@ -350,7 +357,7 @@ def extract_audio_from_video(video_path):
     print_info(f"\nExtracting audio to file: '{output_audio_path}'")
     # https://superuser.com/questions/609740/extracting-wav-from-mp4-while-preserving-the-highest-possible-quality
     cmd = f"ffmpeg -i {video_path} -map 0:a {output_audio_path} -loglevel quiet"
-    run_local_cmd_blocking(cmd, print_cmd=True, print_cmd_prefix="SYSTEM: ",
+    run_local_cmd_blocking(cmd, print_cmd_str=True, print_cmd_prefix="SYSTEM: ",
                            capture_output=False)
     print_info("\nAudio extracted.")
 
@@ -359,7 +366,7 @@ def postprocess_video_file(video_path):
     if not POSTPROCESS_VIDEOS or not os.path.isfile(video_path):
         return
     postprocess_cmd = POSTPROCESSING_CMD + [f"{video_path}"]
-    run_local_cmd_blocking(postprocess_cmd, print_cmd=True, print_cmd_prefix="SYSTEM: ",
+    run_local_cmd_blocking(postprocess_cmd, print_cmd_str=True, print_cmd_prefix="SYSTEM: ",
                            capture_output=False)
 
 def print_info_about_pulled_video(video_path):
