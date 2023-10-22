@@ -78,10 +78,11 @@ def detect_if_jack_running():
 
 def raise_daw_in_window_stack():
     """Run the command to raise the DAW in the window stack."""
-    print_info("\nRaising DAW to top of Window stack:", args().raise_daw_to_top_cmd[0])
+    print_info("\nRaising DAW to top of Window stack.")
     # Allow the command to fail, but issue a warning.
     returncode, stdout, stderr = run_local_cmd_blocking(args().raise_daw_to_top_cmd[0],
-                                                        fail_on_nonzero_exit=False)
+                                     print_cmd_str=True, print_cmd_prefix="SYSTEM: ",
+                                     fail_on_nonzero_exit=False)
     if returncode != 0:
         print_warning("\nWARNING: Nonzero exit status running the raise-DAW command.", file=sys.stderr)
     return returncode
@@ -102,8 +103,8 @@ def toggle_daw_transport():
         print_warning("WARNING: DAW is not detected as running, not toggling transport.",
                 file=sys.stderr)
         return
-    print_info("\nToggle DAW transport cmd:", args().toggle_daw_transport_cmd[0])
     returncode, stdout, stderr = run_local_cmd_blocking(args().toggle_daw_transport_cmd[0],
+                                           print_cmd_str=True, print_cmd_prefix="SYSTEM: ",
                                                                fail_on_nonzero_exit=False)
     if returncode !=0:
         print_warning("WARNING: Nonzero exit status running the toggle-daw command.", file=sys.stderr)
@@ -115,8 +116,9 @@ def add_mark_in_daw():
     if not is_daw_running():
         print_warning("WARNING: DAW is not detected as running, not adding a mark.", file=sys.stderr)
         return
-    print_info(f"\nAdding a new mark in the DAW: {args().add_daw_mark_cmd[0]}")
-    run_local_cmd_blocking(args().add_daw_mark_cmd[0])
+    print_info(f"\nAdding a new mark in the DAW.")
+    run_local_cmd_blocking(args().add_daw_mark_cmd[0], print_cmd_str=True,
+                           print_cmd_prefix="SYSTEM: ")
 
 sync_daw_stop_flag = False # Flag to signal the DAW sync thread to stop.
 
@@ -230,8 +232,9 @@ def start_screen_monitor():
     # Cropped to 16:9.
     #scrcpy --record=$1.mp4 --record-format=mp4 --rotation=0 --lock-video-orientation=initial --stay-awake --disable-screensaver --display-buffer=50 --crop 720:1280:0:320 # --crop 720:1600:0:0
 
-    scrcpy_cmd = args().scrcpy_cmd[0]
+    print_info("\nStarting the scrcpy program.")
 
+    scrcpy_cmd = args().scrcpy_cmd[0]
     window_title_str = f"video file prefix: {args().video_file_prefix}"
     run_local_cmd_blocking(scrcpy_cmd, print_cmd_str=True, print_cmd_prefix="SYSTEM: ",
                            macro_dict={"RDV_SCRCPY_TITLE": window_title_str},
@@ -307,6 +310,8 @@ def monitor_record_and_pull_videos(video_start_number):
 def pull_and_delete_file(pathname):
     """Pull the file at the pathname and delete the remote file.  Returns the
     path of the extracted video."""
+    print_info("\nPulling recorded video(s) from the phone, then deleting them there.")
+
     # Pull.
     adb.adb(f"adb pull {pathname}")
 
