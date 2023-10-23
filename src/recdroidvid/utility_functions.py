@@ -27,6 +27,7 @@ args = None # Set globally from main() after command-line args are parsed.
 # print('back to normal now')
 
 def init_color(parsed_args):
+    """Initialize colorama."""
     if not parsed_args.no_color:
         init(autoreset=True) # To avoid printing Style.RESET_ALL to clear.
     else:
@@ -50,7 +51,7 @@ def print_info(*args, **kwargs):
 def input_query(arg):
     """Print out an ADB command with colorama coloring."""
     if USE_COLOR:
-        return input(Fore.CYAN + arg)
+        return input(Style.BRIGHT+Fore.CYAN + arg)
         #return input(Fore.GREEN + arg)
     else:
         return input(arg)
