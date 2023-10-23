@@ -8,9 +8,9 @@ import sys
 import subprocess
 from colorama import init, Fore, Back, Style
 
-COLOR_PRINTING = True
-if COLOR_PRINTING:
-    init(autoreset=True) # To avoid printing Style.RESET_ALL to clear.
+USE_COLOR = True
+
+args = None # Set globally from main() after command-line args are parsed.
 
 # Available formatting constants are:
 #
@@ -26,10 +26,17 @@ if COLOR_PRINTING:
 # print(Style.RESET_ALL)
 # print('back to normal now')
 
+def init_color(parsed_args):
+    if not parsed_args.no_color:
+        init(autoreset=True) # To avoid printing Style.RESET_ALL to clear.
+    else:
+        global USE_COLOR
+        USE_COLOR = False
+
 def print_color(color, *args, **kwargs):
     """Generic color printing."""
-    if not COLOR_PRINTING:
-        print(*args, **args)
+    if not USE_COLOR:
+        print(*args, **kwargs)
     else:
         print(color, sep="", end="")
         args = list(args)
@@ -42,8 +49,9 @@ def print_info(*args, **kwargs):
 
 def input_query(arg):
     """Print out an ADB command with colorama coloring."""
-    if COLOR_PRINTING:
-        return input(Fore.GREEN + arg)
+    if USE_COLOR:
+        return input(Fore.CYAN + arg)
+        #return input(Fore.GREEN + arg)
     else:
         return input(arg)
 

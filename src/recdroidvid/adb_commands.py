@@ -6,8 +6,9 @@ Commands calling the Android Debug Bridge (ADB) to the moblie device.
 
 import sys
 from time import sleep
-from .settings_and_options import args
 from .utility_functions import run_local_cmd_blocking, print_error
+
+args = None # Set globally from main() after command-line args are parsed.
 
 def adb(cmd, *, print_cmd_str=True, exit_on_error=True):
     """Run the ADB command, printing out diagnostics.  Setting `return_output`
@@ -98,7 +99,7 @@ def open_video_camera():
     # This command seems to avoid opening in a menu, etc., for now....
     # https://android.stackexchange.com/questions/171490/start-application-from-adb
     # https://stackoverflow.com/questions/4567904/how-to-start-an-application-using-android-adb-tools
-    adb(f"adb shell am start -W -n {args().camera_package_name[0]}/.MainActivity --ei android.intent.extras.CAMERA_FACING 0")
+    adb(f"adb shell am start -W -n {args.camera_package_name[0]}/.MainActivity --ei android.intent.extras.CAMERA_FACING 0")
     sleep(1)
 
 def directory_size_increasing(dirname, wait_secs=1):

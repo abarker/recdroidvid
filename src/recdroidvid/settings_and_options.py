@@ -78,20 +78,6 @@ import shutil
 import tempfile
 from .utility_functions import print_info, print_error, print_warning
 
-args_list = [] # A mutable container to hold the parsed arguments.
-
-def args():
-    """Return the parsed arguments.  The `parse_command_line` function must be called
-    first."""
-    # Note: Running `parse_command_line` at module import time would allow the
-    # use of a global var `args` rather than a function `args()`.  Which is preferable?
-    # Do you always want to parse the command-line args, or just sometimes when main calls
-    # `parse_command_line`?
-    if not args_list:
-        print_error("ERROR: Command-line arguments have not been parsed.", file=sys.stderr)
-        raise IndexError
-    return args_list[0]
-
 def fmt(text):
     """Format text for nicer-looking help messages."""
     # https://docs.python.org/3/library/textwrap.html
@@ -246,6 +232,9 @@ def parse_command_line():
                         file.
                         """)
 
+    parser.add_argument("--no-color", action="store_true", default=False, help="""
+                        Do not use color highlighting on the terminal output.""")
+
     # Set the variable for the `--config-conditional` option, based ONLY on cmdline args.
     parsed_cmdline_only_args = parser.parse_args()
     import recdroidvid as rdv
@@ -263,11 +252,8 @@ def parse_command_line():
     if parsed_args.wait_loop: # The wait-loop option implies loop.
         parsed_args.loop = True
 
-    # Reset the module-scope list args_list to contain the parsed args object (where the
-    # `args()` function will be able to access it).
-    args_list.clear()
-    args_list.append(parsed_args)
-
+    global args
+    args = parsed_args
     return parsed_args
 
 #def read_rc_file():

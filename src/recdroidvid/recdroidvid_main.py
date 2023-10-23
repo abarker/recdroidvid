@@ -16,29 +16,31 @@ Currently requires these programs to be installed:
 
 """
 
-# TODO maybe: Colorama colors on output text.
-
-VERSION = "0.1.0"
-
-DEBUG = False
-
 import sys
 import os
 from time import sleep
 import subprocess
 import datetime
 import threading
-from .utility_functions import print_info, print_error, print_warning
 
-from .settings_and_options import (parse_command_line, args, DETECT_JACK_CMD,
+from .utility_functions import print_info, print_error, print_warning
+from .utility_functions import init_color, query_yes_no, indent_lines, run_local_cmd_blocking
+from . import utility_functions
+
+from .settings_and_options import (parse_command_line, DETECT_JACK_CMD,
                 USE_SCREENRECORD, RECORD_DETECTION_METHOD, SYNC_DAW_SLEEP_TIME,
                 VIDEO_FILE_EXTENSION, QUERY_EXTRACT_AUDIO, QUERY_PREVIEW_VIDEO,
                 EXTRACTED_AUDIO_EXTENSION, POSTPROCESS_VIDEOS,
                 POSTPROCESSING_CMD)
 
-from .utility_functions import query_yes_no, indent_lines, run_local_cmd_blocking
 from . import adb_commands as adb
 from .adb_commands import ADBException
+
+args = None # Set globally from main() after command-line args are parsed.
+
+VERSION = "0.1.1"
+
+DEBUG = False
 
 #
 # Local machine startup functions.
@@ -80,7 +82,7 @@ def raise_daw_in_window_stack():
     """Run the command to raise the DAW in the window stack."""
     print_info("\nRaising DAW to top of Window stack.")
     # Allow the command to fail, but issue a warning.
-    returncode, stdout, stderr = run_local_cmd_blocking(args().raise_daw_to_top_cmd[0],
+    returncode, stdout, stderr = run_local_cmd_blocking(args.raise_daw_to_top_cmd[0],
                                      print_cmd_str=True, print_cmd_prefix="SYSTEM: ",
                                      fail_on_nonzero_exit=False)
     if returncode != 0:
@@ -89,7 +91,7 @@ def raise_daw_in_window_stack():
 
 def is_daw_running():
     """Return true or false as to whether the DAW is running."""
-    returncode, stdout, stderr = run_local_cmd_blocking(args().is_daw_running_cmd[0],
+    returncode, stdout, stderr = run_local_cmd_blocking(args.is_daw_running_cmd[0],
                                                                fail_on_nonzero_exit=False)
     if returncode != 0:
         print_debug(f"\nDEBUG: DAW not detected as running.")
@@ -103,12 +105,12 @@ def toggle_daw_transport():
         print_warning("WARNING: DAW is not detected as running, not toggling transport.",
                 file=sys.stderr)
         return
-    returncode, stdout, stderr = run_local_cmd_blocking(args().toggle_daw_transport_cmd[0],
+    returncode, stdout, stderr = run_local_cmd_blocking(args.toggle_daw_transport_cmd[0],
                                            print_cmd_str=True, print_cmd_prefix="SYSTEM: ",
                                                                fail_on_nonzero_exit=False)
     if returncode !=0:
         print_warning("WARNING: Nonzero exit status running the toggle-daw command.", file=sys.stderr)
-    if args().raise_daw_on_transport_toggle:
+    if args.raise_daw_on_transport_toggle:
         raise_returncode = raise_daw_in_window_stack()
 
 def add_mark_in_daw():
@@ -117,7 +119,7 @@ def add_mark_in_daw():
         print_warning("WARNING: DAW is not detected as running, not adding a mark.", file=sys.stderr)
         return
     print_info(f"\nAdding a new mark in the DAW.")
-    run_local_cmd_blocking(args().add_daw_mark_cmd[0], print_cmd_str=True,
+    run_local_cmd_blocking(args.add_daw_mark_cmd[0], print_cmd_str=True,
                            print_cmd_prefix="SYSTEM: ")
 
 sync_daw_stop_flag = False # Flag to signal the DAW sync thread to stop.
@@ -126,10 +128,10 @@ def video_is_recording_on_device():
     """Function to detect when video is recording on the Android device, returns
     true or false."""
     if RECORD_DETECTION_METHOD == "directory size increasing":
-        return adb.directory_size_increasing(args().camera_save_dir[0],
+        return adb.directory_size_increasing(args.camera_save_dir[0],
                                              wait_secs=1)
     if RECORD_DETECTION_METHOD == ".pending filename prefix":
-        return adb.pending_video_file_exists(args().camera_save_dir[0])
+        return adb.pending_video_file_exists(args.camera_save_dir[0])
 
     print_error(f"Error in recdroidvid setting: Unrecognized RECORD_DETECTION_METHOD:"
           f"\n   '{RECORD_DETECTION_METHOD}'", file=sys.stderr)
@@ -145,7 +147,7 @@ def sync_daw_transport_bg_process(stop_flag_fun):
         if not daw_transport_rolling and vid_recording: # Start DAW recording transport.
             print_debug(f"\n{daw_transport_rolling=}   {vid_recording=}")
             print_info("\nStarting (toggling) DAW transport.")
-            if args().add_daw_mark_on_transport_start:
+            if args.add_daw_mark_on_transport_start:
                 add_mark_in_daw()
             toggle_daw_transport() # Later could be a "start transport" cmd.
             daw_transport_rolling = True
@@ -184,8 +186,8 @@ def start_screenrecording():
     """Start screenrecording via the ADB `screenrecord` command.  This process is run
     in the background.  The PID is returned along with the video pathname."""
     # CODE DEPRECATED AND NOW UNTESTED!!!!
-    video_out_basename = args().video_file_prefix[0]
-    video_out_pathname =  os.path.join(args().camera_save_dir[0], f"{video_out_basename}.mp4")
+    video_out_basename = args.video_file_prefix[0]
+    video_out_pathname =  os.path.join(args.camera_save_dir[0], f"{video_out_basename}.mp4")
     tmp_pid_path = f"zzzz_screenrecord_pid_tmp"
     adb.ls(os.path.dirname(video_out_pathname)) # DOESNT DO ANYTHING?? DEBUG??
 
@@ -234,8 +236,8 @@ def start_screen_monitor():
 
     print_info("\nStarting the scrcpy program.")
 
-    scrcpy_cmd = args().scrcpy_cmd[0]
-    window_title_str = f"video file prefix: {args().video_file_prefix}"
+    scrcpy_cmd = args.scrcpy_cmd[0]
+    window_title_str = f"video file prefix: {args.video_file_prefix}"
     run_local_cmd_blocking(scrcpy_cmd, print_cmd_str=True, print_cmd_prefix="SYSTEM: ",
                            macro_dict={"RDV_SCRCPY_TITLE": window_title_str},
                            capture_output=False)
@@ -243,42 +245,42 @@ def start_screen_monitor():
 def start_monitoring_and_button_push_recording():
     """Emulate a button push to start and stop recording."""
     # Get a snapshot of save directory before recording starts.
-    before_ls = adb.ls(args().camera_save_dir[0], extension_whitelist=[VIDEO_FILE_EXTENSION])
+    before_ls = adb.ls(args.camera_save_dir[0], extension_whitelist=[VIDEO_FILE_EXTENSION])
 
-    if args().autorecord:
+    if args.autorecord:
         adb.tap_camera_button()
 
-    if args().sync_daw_transport_with_video_recording:
+    if args.sync_daw_transport_with_video_recording:
         proc = sync_daw_transport_with_video_recording()
 
     start_screen_monitor() # This blocks until the screen monitor is closed.
 
     # If the user just shut down scrcpy while recording video, stop the recording.
-    if adb.directory_size_increasing(args().camera_save_dir[0]):
+    if adb.directory_size_increasing(args.camera_save_dir[0]):
         adb.tap_camera_button() # Presumably still recording; turn off the camera.
-        #if args().sync_daw_transport_with_video_recording: # Now BG thread is still running to stop DAW transport.
+        #if args.sync_daw_transport_with_video_recording: # Now BG thread is still running to stop DAW transport.
         #    toggle_daw_transport() # Presumably the DAW transport is still rolling.
-        while adb.directory_size_increasing(args().camera_save_dir[0]):
+        while adb.directory_size_increasing(args.camera_save_dir[0]):
             print_info("Waiting for save directory to stop increasing in size...")
             sleep(1)
 
-    if args().sync_daw_transport_with_video_recording:
+    if args.sync_daw_transport_with_video_recording:
         sync_daw_process_kill(proc)
 
     # Get a final snapshot of save directory after recording is finished.
-    after_ls = adb.ls(args().camera_save_dir[0], extension_whitelist=[VIDEO_FILE_EXTENSION])
+    after_ls = adb.ls(args.camera_save_dir[0], extension_whitelist=[VIDEO_FILE_EXTENSION])
 
     new_video_files = [f for f in after_ls if f not in before_ls]
-    new_video_paths = [os.path.join(args().camera_save_dir[0], v) for v in new_video_files]
+    new_video_paths = [os.path.join(args.camera_save_dir[0], v) for v in new_video_files]
     return new_video_paths
 
 def generate_video_name(video_number, pulled_vid_name):
     """Generate the name to rename a pulled video to."""
-    if args().date_and_time_in_video_name:
+    if args.date_and_time_in_video_name:
         date_time_string = datetime.datetime.now().strftime('%Y-%m-%d_%H.%M.%S_')
     else:
         date_time_string = ""
-    new_vid_name = f"{args().video_file_prefix}_{video_number:02d}_{date_time_string}{pulled_vid_name}"
+    new_vid_name = f"{args.video_file_prefix}_{video_number:02d}_{date_time_string}{pulled_vid_name}"
     return new_vid_name
 
 def monitor_record_and_pull_videos(video_start_number):
@@ -327,7 +329,7 @@ SET_ACTIVE_WINDOW_ALWAYS_ON_TOP_CMD = ["wmctrl", "-r", ":ACTIVE:", "-b", "toggle
 
 def preview_video(video_path):
     """Run a preview of the video at `video_path`."""
-    if not (args().preview_video or QUERY_PREVIEW_VIDEO):
+    if not (args.preview_video or QUERY_PREVIEW_VIDEO):
         return
     if QUERY_PREVIEW_VIDEO and not query_yes_no("\nRun preview? "):
         return
@@ -335,10 +337,10 @@ def preview_video(video_path):
     print_info("\nRunning preview...")
     if detect_if_jack_running():
         print_info("\nDetected jack audio running.")
-        preview_cmd = args().preview_video_cmd_jack[0] + f" {video_path}"
+        preview_cmd = args.preview_video_cmd_jack[0] + f" {video_path}"
     else:
         print_info("\nDid not detect jack audio running.")
-        preview_cmd = args().preview_video_cmd[0] + f" {video_path}"
+        preview_cmd = args.preview_video_cmd[0] + f" {video_path}"
 
     run_local_cmd_blocking(preview_cmd, print_cmd_str=True, capture_output=False,
                        print_cmd_prefix="SYSTEM: ",
@@ -350,7 +352,7 @@ def preview_video(video_path):
 
 def extract_audio_from_video(video_path):
     """Extract the audio from a video file, of the type with the given extension."""
-    if not ((args().audio_extract or QUERY_EXTRACT_AUDIO) and os.path.isfile(video_path)
+    if not ((args.audio_extract or QUERY_EXTRACT_AUDIO) and os.path.isfile(video_path)
                                                    and not USE_SCREENRECORD):
         return
     if QUERY_EXTRACT_AUDIO and not query_yes_no("\nExtract audio from video? "):
@@ -398,7 +400,7 @@ def startup_device_and_run(video_start_number):
     adb.device_wakeup()
     adb.unlock_screen()
     adb.open_video_camera()
-    if args().raise_daw_on_camera_app_open:
+    if args.raise_daw_on_camera_app_open:
         raise_daw_in_window_stack()
 
     video_paths = monitor_record_and_pull_videos(video_start_number)
@@ -416,15 +418,21 @@ def startup_device_and_run(video_start_number):
 
 def main():
     """Outer loop over invocations of the scrcpy screen monitor."""
-    parse_command_line()
+    # Parse the command-line arguments and set the args global for modules that use it.
+    global args
+    args = parse_command_line()
+    utility_functions.args = args
+    adb.args = args
 
-    video_start_number = args().numbering_start[0]
+    # General init stuff.
+    init_color(args)
+    video_start_number = args.numbering_start[0]
     print_startup_message()
 
     count = 0
     device_found = True
     while True:
-        if device_found == False or count == 0 and args().wait_loop:
+        if device_found == False or count == 0 and args.wait_loop:
             cont = query_yes_no(f"\nRecdroidvid wait loop, continue?"
                                 f" [ynq enter=y]: ", empty_default="y")
             device_found = True
@@ -442,7 +450,7 @@ def main():
             continue
 
         video_start_number = video_end_number + 1
-        if not args().loop:
+        if not args.loop:
             break
         cont = query_yes_no(f"\nFinished recdroidvid loop {count}, continue?"
                             f" [ynq enter=y]: ", empty_default="y")
