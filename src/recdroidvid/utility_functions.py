@@ -12,7 +12,7 @@ USE_COLOR = True
 
 args = None # Set globally from main() after command-line args are parsed.
 
-# Available formatting constants are:
+# Available Colorama formatting constants are:
 #
 # Fore: BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE, RESET.
 # Back: BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE, RESET.
@@ -27,9 +27,9 @@ args = None # Set globally from main() after command-line args are parsed.
 # print('back to normal now')
 
 def init_color(parsed_args):
-    """Initialize colorama."""
+    """Initialize Colorama."""
     if not parsed_args.no_color:
-        init(autoreset=True) # To avoid printing Style.RESET_ALL to clear.
+        init(autoreset=False) # To avoid printing Style.RESET_ALL to clear.
     else:
         global USE_COLOR
         USE_COLOR = False
@@ -39,17 +39,21 @@ def print_color(color, *args, **kwargs):
     if not USE_COLOR:
         print(*args, **kwargs)
     else:
-        print(color, sep="", end="")
+        # For some reason this line below is needed or else BRIGHT text is not
+        # turned off after printing, even though `autoreset=True` is set in init.
+        #print(color, sep="", end="") # Works, too.
+        print(Style.RESET_ALL, sep="", end="")
+
         args = list(args)
         args[0] = color + args[0]
         print(*args, **kwargs)
 
 def print_info(*args, **kwargs):
-    """Print out an ADB command with colorama coloring."""
+    """Print out an ADB command with Colorama coloring."""
     print_color(Fore.GREEN, *args, **kwargs)
 
 def input_query(arg):
-    """Print out an ADB command with colorama coloring."""
+    """Print out an ADB command with Colorama coloring."""
     if USE_COLOR:
         return input(Style.BRIGHT+Fore.CYAN + arg)
         #return input(Fore.GREEN + arg)
@@ -57,15 +61,15 @@ def input_query(arg):
         return input(arg)
 
 def print_cmd(*args, **kwargs):
-    """Print out an ADB command with colorama coloring."""
+    """Print out an ADB command with Colorama coloring."""
     print_color(Fore.BLUE, *args, **kwargs)
 
 def print_error(*args, **kwargs):
-    """Print out an ADB command with colorama coloring."""
+    """Print out an ADB command with Colorama coloring."""
     print_color(Fore.RED, *args, **kwargs)
 
 def print_warning(*args, **kwargs):
-    """Print out an ADB command with colorama coloring."""
+    """Print out an ADB command with Colorama coloring."""
     print_color(Fore.YELLOW, *args, **kwargs)
 
 def query_yes_no(query_string, empty_default=None):
