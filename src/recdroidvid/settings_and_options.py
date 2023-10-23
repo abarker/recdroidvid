@@ -46,7 +46,8 @@ QUERY_EXTRACT_AUDIO = False # Ask before extracting AUDIO file.
 EXTRACTED_AUDIO_EXTENSION = ".wav"
 
 IS_DAW_RUNNING_CMD = 'xdotool search --onlyvisible --class Ardour'
-TOGGLE_DAW_TRANSPORT_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" space'
+START_DAW_RECORDING_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" shift+space'
+STOP_DAW_TRANSPORT_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" space'
 #TOGGLE_DAW_TRANSPORT_CMD = 'xdotool windowactivate "$(xdotool search --onlyvisible --class Ardour | head -1)"'
 
 ADD_DAW_MARK_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" Tab'
@@ -168,10 +169,15 @@ def parse_command_line():
                         video recording is detected on the mobile device.  May increase
                         CPU loads on the computer and the mobile device.""")
 
-    parser.add_argument("--toggle-daw-transport-cmd", type=str, nargs=1, metavar="CMD-STRING",
-                        default=[TOGGLE_DAW_TRANSPORT_CMD], help="""A system command to toggle the
+    parser.add_argument("--start-daw-recording-cmd", type=str, nargs=1, metavar="CMD-STRING",
+                        default=[START_DAW_RECORDING_CMD], help="""A system command to start
+                        DAW recording.  Used when the `--sync-to-daw` option is chosen.  The
+                        default uses xdotool to send a shift-space character to Ardour.""")
+
+    parser.add_argument("--stop-daw-transport-cmd", type=str, nargs=1, metavar="CMD-STRING",
+                        default=[STOP_DAW_TRANSPORT_CMD], help="""A system command to stop the
                         DAW transport.  Used when the `--sync-to-daw` option is chosen.  The
-                        default uses xdotool to send a space-bar character to Ardour.""")
+                        default uses xdotool to send a space character to Ardour.""")
 
     parser.add_argument("--add-daw-mark-on-transport-start", "-m", action="store_true",
                         help="""Whether to add a mark in the DAW when the

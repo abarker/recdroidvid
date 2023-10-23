@@ -41,11 +41,12 @@ def print_color(color, *args, **kwargs):
     else:
         # For some reason this line below is needed or else BRIGHT text is not
         # turned off after printing, even though `autoreset=True` is set in init.
-        #print(color, sep="", end="") # Works, too.
-        print(Style.RESET_ALL, sep="", end="")
+        #print(color, sep="", end="")
+        #print(Style.RESET_ALL, sep="", end="") # This still fails to turn off sometimes...
 
         args = list(args)
-        args[0] = color + args[0]
+        args[0] = Style.RESET_ALL + color + args[0]
+        args[-1] = args[-1] + Style.RESET_ALL
         print(*args, **kwargs)
 
 def print_info(*args, **kwargs):

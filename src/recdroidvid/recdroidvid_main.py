@@ -99,17 +99,31 @@ def is_daw_running():
     print_debug(f"\nDEBUG: DAW detected as running.")
     return True
 
-def toggle_daw_transport():
-    """Toggle the transport state of the DAW.  Used to sync with recording."""
+def start_daw_recording():
+    """Start the recording transport state of the DAW.  Used to sync with recording."""
     if not is_daw_running():
         print_warning("WARNING: DAW is not detected as running, not toggling transport.",
                 file=sys.stderr)
         return
-    returncode, stdout, stderr = run_local_cmd_blocking(args.toggle_daw_transport_cmd[0],
+    returncode, stdout, stderr = run_local_cmd_blocking(args.start_daw_recording_cmd[0],
                                            print_cmd_str=True, print_cmd_prefix="SYSTEM: ",
                                                                fail_on_nonzero_exit=False)
     if returncode !=0:
-        print_warning("WARNING: Nonzero exit status running the toggle-daw command.", file=sys.stderr)
+        print_warning("WARNING: Nonzero exit status running the start-daw-recording command.", file=sys.stderr)
+    if args.raise_daw_on_transport_toggle:
+        raise_returncode = raise_daw_in_window_stack()
+
+def stop_daw_transport():
+    """Stop the DAW transport.  Used to sync with recording."""
+    if not is_daw_running():
+        print_warning("WARNING: DAW is not detected as running, not toggling transport.",
+                file=sys.stderr)
+        return
+    returncode, stdout, stderr = run_local_cmd_blocking(args.stop_daw_transport_cmd[0],
+                                           print_cmd_str=True, print_cmd_prefix="SYSTEM: ",
+                                                               fail_on_nonzero_exit=False)
+    if returncode !=0:
+        print_warning("WARNING: Nonzero exit status running the stop-daw-transport command.", file=sys.stderr)
     if args.raise_daw_on_transport_toggle:
         raise_returncode = raise_daw_in_window_stack()
 
@@ -149,12 +163,12 @@ def sync_daw_transport_bg_process(stop_flag_fun):
             print_info("\nStarting (toggling) DAW transport.")
             if args.add_daw_mark_on_transport_start:
                 add_mark_in_daw()
-            toggle_daw_transport() # Later could be a "start transport" cmd.
+            start_daw_recording()
             daw_transport_rolling = True
         if daw_transport_rolling and not vid_recording: # Stop DAW recording transport.
             print_debug(f"\n{daw_transport_rolling=}   {vid_recording=}")
             print_info("\nStopping (toggling) DAW transport.")
-            toggle_daw_transport() # Later could be a "stop transport" cmd.
+            stop_daw_transport()
             daw_transport_rolling = False
         if stop_flag_fun():
             break
@@ -259,7 +273,7 @@ def start_monitoring_and_button_push_recording():
     if adb.directory_size_increasing(args.camera_save_dir[0]):
         adb.tap_camera_button() # Presumably still recording; turn off the camera.
         #if args.sync_daw_transport_with_video_recording: # Now BG thread is still running to stop DAW transport.
-        #    toggle_daw_transport() # Presumably the DAW transport is still rolling.
+        #    stop_daw_transport() # Presumably the DAW transport is still rolling.
         while adb.directory_size_increasing(args.camera_save_dir[0]):
             print_info("Waiting for save directory to stop increasing in size...")
             sleep(1)

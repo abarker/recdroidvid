@@ -94,6 +94,16 @@ option to set any movie player program from the command line):
 
     sudo apt install mpv
 
+DAW transport synchronization
+-----------------------------
+
+The xdotool program is currently used in order to start the DAW transport when
+that option is selected.
+
+.. code-block:: bash
+
+    sudo apt install xdotool
+
 Options and Customization
 =========================
 

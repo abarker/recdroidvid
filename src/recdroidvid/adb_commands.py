@@ -18,7 +18,8 @@ def adb(cmd, *, print_cmd_str=True, exit_on_error=True):
                                                         print_cmd_prefix="ADB: ",
                                                         fail_on_nonzero_exit=False)
     if stderr.startswith("error: no devices"):
-        print_error("\nERROR: No devices found, is the phone plugged in via USB?", file=sys.stderr)
+        print_error("\nERROR: No devices found, is the phone plugged in via USB,"
+                    "\nwith access permission granted on the device?", file=sys.stderr)
         if exit_on_error:
             sys.exit(1)
         else:
