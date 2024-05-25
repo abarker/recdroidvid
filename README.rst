@@ -52,7 +52,8 @@ On Ubuntu the command to install from the repos is:
 
     sudo apt install scrcpy
 
-Installing via snap is also possible (and may be a more recent version):
+Installing via snap is also possible (it may be a more recent version,
+but the packaged version of adb may or may not match your device):
 
 .. code-block:: bash
 
@@ -112,9 +113,11 @@ Options and Customization
 
 To see the command-line options, run ``recdroidvid --help | more``.  The output
 of that command follows.  Note that any options can also be set in the config
-file `~/.recdroidvid_rc.py`.  The file will be imported and the strings on the
-list `rdv_options` will be used as the default command-line options.  See the
+file ``~/.recdroidvid_rc.py``.  The file will be imported and the strings on the
+list ``rdv_options`` will be used as the default command-line options.  See the
 example config file.
+
+This is the help command output::
 
    usage: recdroidvid [-h] [--scrcpy-cmd CMD-STRING] [--numbering-start INTEGER]
                       [--loop] [--autorecord] [--preview-video]
