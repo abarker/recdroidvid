@@ -89,7 +89,7 @@ previewing
 ----------
 
 Previewing by default assumes the mpv movie player is installed (though there is an
-option to set any movie player program from the command line):
+option to set any movie player program from the command line or option file):
 
 .. code-block:: bash
 
