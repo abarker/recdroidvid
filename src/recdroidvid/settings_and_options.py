@@ -17,12 +17,11 @@ VIDEO_FILE_EXTENSION = ".mp4"
 # Note the title macro is substituted-in later.
 SCRCPY_CMD_DEFAULT = ["scrcpy", "--stay-awake",
                                 "--disable-screensaver",
-                                "--display-buffer=20",
+                                "--video-buffer=20",
                                 "--window-title=RDV_SCRCPY_TITLE",
                                 "--always-on-top",
-                                "--rotation=0",
-                                "--max-size=1200",
-                                "--lock-video-orientation=initial",]
+                                "--orientation=0",
+                                "--max-size=1200",]
 
 BASE_VIDEO_PLAYER_CMD = ["mpv", "--loop=inf",
                                 "--autofit=1080", # Set the width of displayed video.

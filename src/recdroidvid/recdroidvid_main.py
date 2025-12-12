@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 """
 
 Usage: recdroidvid.py
@@ -231,27 +231,22 @@ def start_screen_monitor():
     #
     # Note that capturing full 1600x720 is possible, but below cropped to 16:9.
 
-    # NOTE the lock-video-orientation seems to apply to recorded media, but --rotation seems to just
-    # affect the computer preview display.  Had to fiddle with the combo to get both right-side-up.
+    # NOTE that lock-video-orientation is gone in recent scrcpy, but you can
+    # pass an @ symbol in different ways to --orientation (or
+    # --display-orientation and --capture-orientation).
     #
-    # --lock-video-orientation[=value]
-    #      Lock video orientation to value.
-    #      Possible values are "unlocked", "initial" (locked to the initial
-    #      orientation), 0, 1, 2 and 3. Natural device orientation is 0, and each
-    #      increment adds a 90 degrees rotation counterclockwise.
-    #      Default is "unlocked".
-    #      Passing the option without argument is equivalent to passing "initial".
 
     # Uncropped.
-    #scrcpy --record=$1.mp4 --record-format=mp4 --rotation=0 --lock-video-orientation=initial --stay-awake --disable-screensaver --display-buffer=50 --crop 720:1280:0:160 # --crop 720:1600:0:0
+    #scrcpy --record=$1.mp4 --record-format=mp4 --orientation=0 --stay-awake --disable-screensaver --video-buffer=50 --crop 720:1280:0:160 # --crop 720:1600:0:0
 
     # Cropped to 16:9.
-    #scrcpy --record=$1.mp4 --record-format=mp4 --rotation=0 --lock-video-orientation=initial --stay-awake --disable-screensaver --display-buffer=50 --crop 720:1280:0:320 # --crop 720:1600:0:0
+    #scrcpy --record=$1.mp4 --record-format=mp4 --orientation=0 --stay-awake --disable-screensaver --video-buffer=50 --crop 720:1280:0:320 # --crop 720:1600:0:0
 
     print_info("\nStarting the scrcpy program.")
 
     scrcpy_cmd = args.scrcpy_cmd[0]
-    window_title_str = f"video file prefix: {args.video_file_prefix}"
+    #window_title_str = f"video file prefix: {args.video_file_prefix}" # TODO, this caused cmd line error, below fixes.
+    window_title_str = f"{args.video_file_prefix}"
     run_local_cmd_blocking(scrcpy_cmd, print_cmd_str=True, print_cmd_prefix="SYSTEM: ",
                            macro_dict={"RDV_SCRCPY_TITLE": window_title_str},
                            capture_output=False)
