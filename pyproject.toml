@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "recdroidvid"
+#dynamic = ["version"]
+version = "0.0.3"
+description = "Record and monitor video on android devices from computer (currently Linux via USB)."
+readme = "README.rst"
+license = "MIT"
+requires-python = ">=3.6"
+authors = [
+    { name = "Allen Barker", email = "Allen.L.Barker@gmail.com" },
+]
+keywords = [
+    "adb",
+    "android",
+    "linux",
+    "monitor",
+    "movie",
+    "record",
+    "remote",
+    "usb",
+    "video",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "colorama",
+    "wheel",
+]
+
+[project.scripts]
+recdroidvid = "recdroidvid.recdroidvid_main:main"
+
+[project.urls]
+Homepage = "https://github.com/abarker/recdroidvid"
+

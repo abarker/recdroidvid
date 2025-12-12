@@ -52,14 +52,15 @@ On Ubuntu the command to install from the repos is:
 
     sudo apt install scrcpy
 
-Installing via snap is also possible (it may be a more recent version,
+Installing via snap is also possible (it should be a more recent version,
 but the packaged version of adb may or may not match your device):
 
 .. code-block:: bash
 
     sudo snap install scrcpy
     snap connect scrcpy:camera
-
+    sudo snap connect scrcpy:raw-usb # Required to use OTG mode.
+    
 Setup requires that developer mode be activated on the mobile device to allow
 ADB commands via USB:
 
