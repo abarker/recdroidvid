@@ -85,6 +85,7 @@ def unlock_screen():
     # Note 82 is the menu key.
     #adb(f"adb shell input keyevent 82 && adb shell input keyevent 66")
     adb("adb shell input keyevent 3") # Simulate Home button to put down anything up.
+    #adb("adb shell am start -W -c android.intent.category.HOME -a android.intent.action.MAIN") # Do home event.
     adb(f"adb shell input keyevent 82")
     sleep(1)
 
@@ -101,8 +102,10 @@ def open_video_camera():
     # This command seems to avoid opening in a menu, etc., for now....
     # https://android.stackexchange.com/questions/171490/start-application-from-adb
     # https://stackoverflow.com/questions/4567904/how-to-start-an-application-using-android-adb-tools
-    adb("adb shell input keyevent 3") # Simulate Home button to put down anything up.
-    adb(f"adb shell am start -W -n {args.camera_package_name[0]}/.MainActivity --ei android.intent.extras.CAMERA_FACING 0")
+    #adb("adb shell input keyevent 3") # Simulate Home button to put down anything up.
+    adb("adb shell am start -W -c android.intent.category.HOME -a android.intent.action.MAIN") # Do a home event.
+    #adb(f"adb shell am start -W -n {args.camera_package_name[0]}/.MainActivity --ei android.intent.extras.CAMERA_FACING 0")
+    adb("adb shell monkey -p net.sourceforge.opencamera 1") # TODO: Above opens menu in opencamera for some reason...
     sleep(1)
 
 def directory_size_increasing(dirname, wait_secs=1):
