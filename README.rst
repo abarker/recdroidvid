@@ -46,21 +46,27 @@ phone.  (All the actual recording is done on the phone, however.) The program
 is available in many linux repos, or can be compiled from the scrcpy site
 at https://github.com/Genymobile/scrcpy.
 
-On Ubuntu the command to install from the repos is:
+On Ubuntu the repos are out of date as of 2026.  The easiest way to install
+is to get the pre-compiled version from the scrcpy repo at https://github.com/Genymobile/scrcpy/blob/master/doc/linux.md
+Download the tarball, untarzip it, and run the executable in the main dir:
 
 .. code-block:: bash
 
-    sudo apt install scrcpy
+    scrcpy-linux-x86_64-v4.1/scrcpy
 
-Installing via snap is also possible (it should be a more recent version,
-but the packaged version of adb may or may not match your device):
+Installing via snap is also possible but the snap installs can be harder to get
+working and the packaged version of adb may or may not match your device.  This
+worked at one point, but now my need more connect commands to work:
 
-.. code-block:: bash
+   .. code-block:: bash
 
     sudo snap install scrcpy
     snap connect scrcpy:camera
     sudo snap connect scrcpy:raw-usb # Required to use OTG mode.
-    
+
+Device setup for scrcpy
+-----------------------
+
 Setup requires that developer mode be activated on the mobile device to allow
 ADB commands via USB:
 
