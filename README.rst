@@ -189,10 +189,38 @@ is still enabled.
 See the Ardour manual's OSC section for more information:
 https://manual.ardour.org/using-control-surfaces/controlling-ardour-with-osc/
 
-The commands used are set by the ``--start-daw-recording-cmd``,
-``--stop-daw-transport-cmd``, and ``--add-daw-mark-cmd`` options, so they can
-be changed (for example to use a different OSC port, or a different DAW).  In
-the mark command the string ``RDV_MARK_NAME`` is replaced by the mark name.
+To use a different OSC port, set the commands described in the next section
+with the new port number.
+
+Using another DAW
+~~~~~~~~~~~~~~~~~
+
+Only the default commands are specific to Ardour.  Another DAW can be used by
+setting these options, usually in the config file, to system commands that
+control it:
+
+``--start-daw-recording-cmd``
+    Start recording.
+
+``--stop-daw-transport-cmd``
+    Stop the transport.
+
+``--add-daw-mark-cmd``
+    Add a mark at the playhead (only needed with
+    ``--add-daw-mark-on-transport-start``).  The string ``RDV_MARK_NAME`` in
+    the command is replaced by the shell-quoted mark name.  It can be left out
+    if the DAW cannot name marks this way.
+
+``--is-daw-running-cmd``
+    Exit with status zero if the DAW is running, and nonzero if not.  The other
+    DAW commands are skipped when it is not running.
+
+``--raise-daw-to-top-cmd``
+    Raise the DAW's windows (only needed with the ``--raise-daw-on-*``
+    options).
+
+Any command-line program can be used, such as ``oscsend`` for a DAW that
+accepts OSC messages.  Run ``recdroidvid --help`` to see the Ardour defaults.
 
 Options and Customization
 =========================
