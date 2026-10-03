@@ -18,7 +18,7 @@ VIDEO_FILE_EXTENSION = ".mp4"
 SCRCPY_CMD_DEFAULT = ["scrcpy", "--stay-awake",
                                 "--disable-screensaver",
                                 "--video-buffer=20",
-                                "--window-title=RDV_SCRCPY_TITLE",
+                                "--window-title='RDV_SCRCPY_TITLE'",
                                 "--always-on-top",
                                 "--orientation=0",
                                 "--max-size=1200",]
@@ -44,7 +44,11 @@ QUERY_EXTRACT_AUDIO = False # Ask before extracting AUDIO file.
 
 EXTRACTED_AUDIO_EXTENSION = ".wav"
 
-IS_DAW_RUNNING_CMD = 'xdotool search --onlyvisible --class Ardour'
+# Check for a running Ardour process (named like `ardour-9.8.0`).  Unlike the
+# older xdotool window search below, this works when Ardour is minimized or on
+# another workspace.
+IS_DAW_RUNNING_CMD = 'pgrep -i "^ardour"'
+#IS_DAW_RUNNING_CMD = 'xdotool search --onlyvisible --class Ardour'
 
 # The DAW transport and marks are controlled via OSC messages sent with the
 # `oscsend` program (from liblo-tools).  OSC must be enabled in Ardour, under
@@ -112,7 +116,8 @@ def parse_command_line():
                         """Record a video on mobile via ADB and pull result.  All config
                         options can be set in a file `.recdroidvid_rc.py`.  The file is
                         evaluated and the list `rdv_options` in the file is used as the
-                        options list.  See the example config file.""")
+                        options list.  See the example config file
+                        `examples/recdroidvid_rc.py` in the project repository.""")
 
     parser.add_argument("video_file_prefix", type=str, nargs="?", metavar="PREFIXSTRING",
                         default="rdv", help="""The basename or prefix of the pulled video
@@ -206,26 +211,28 @@ def parse_command_line():
 
     parser.add_argument("--raise-daw-on-camera-app-open", "-q", action="store_true",
                         help="""Raise the DAW to the top
-                        of the window stack when the camara app is opened on the mobile device.
+                        of the window stack when the camera app is opened on the mobile device.
                         Works well when scrcpy is also passed the `--always-on-top` option.""")
 
     parser.add_argument("--raise-daw-on-transport-toggle", "-r", action="store_true",
                         default=False, help= """Raise the DAW to the top of the window
-                        stack whenever the DAW transport is toggled by the `--sync-to-daw`
-                        option.  Works well when scrcpy is also passed the
+                        stack whenever the DAW transport is started or stopped by the
+                        `--sync-daw-transport-with-video-recording` option.  Works well
+                        when scrcpy is also passed the
                         `--always-on-top` option.""")
 
     parser.add_argument("--raise-daw-to-top-cmd", type=str, nargs=1, metavar="CMD-STRING",
                         default=[RAISE_DAW_TO_TOP_CMD], help="""A system command to raise the
                         DAW windows to the top of the window stack.  Used when either of the
-                        `--raise_daw_on_camera_app_open` or `--raise-daw-on-transport-toggle`
+                        `--raise-daw-on-camera-app-open` or `--raise-daw-on-transport-toggle`
                         options are selected.  The default uses xdotool to activate any Ardour
                         windows.""")
 
     parser.add_argument("--is-daw-running-cmd", type=str, nargs=1, metavar="CMD-STRING",
                         default=[IS_DAW_RUNNING_CMD], help="""A system command to test if
                         the DAW is actually running.  A zero return code means it is, and
-                        a nonzero return code means it isn't.""")
+                        a nonzero return code means it isn't.  The default uses pgrep to
+                        look for an Ardour process.""")
 
     parser.add_argument("--audio-extract", "-e", action="store_true", default=False,
                         help="""Extract a separate audio file (currently always a WAV file)

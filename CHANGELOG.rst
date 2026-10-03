@@ -13,6 +13,25 @@ History
 * DAW marks are now named to match the start of the saved video names, such as
   ``rdv_03_2026-10-03``.
 
+* The DAW-running check now looks for an Ardour process instead of a visible
+  Ardour window, so DAW syncing also works when Ardour is minimized or on
+  another workspace.
+
+* The ``--camera-package-name`` option is now used (it was ignored).
+
+* Filenames and the video prefix are now quoted in system and ADB commands,
+  so a prefix with spaces works.
+
+* Recording detection now works if the camera directory has subdirectories.
+
+* Failing to get the video information with ffprobe now gives a warning
+  instead of exiting.
+
+* Python 3.8 or later is now required (this was already true of the code).
+
+* Added an example config file, ``examples/recdroidvid_rc.py``, fixed the
+  README screenshot link, and updated the docs.
+
 * Version numbers made consistent.  The 0.1.0 release on PyPI was an older
   (2022) release, uploaded before 0.0.3.
 

@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
 
-Usage: recdroidvid.py
+Usage: recdroidvid [options] [PREFIXSTRING]
 
-Be sure to install scrcpy and set phone to allow for ADB communication over
-USB.  See the video recording notes in ardour directory for details.
+Be sure to install scrcpy and set the phone to allow for ADB communication over
+USB.  See the README for details.
 
 Currently requires these programs to be installed:
-    scrcpy
+    scrcpy and adb
     ffprobe, to print information about videos
     ffmpeg, for audio extraction when that option is selected
     mpv, for previewing when that option is selected
-
-    sudo apt install scrcpy ffmpeg mpv
+    oscsend (from liblo-tools), for DAW syncing when that option is selected
+    xdotool, for raising the DAW window when those options are selected
 
 """
 
@@ -344,13 +344,14 @@ def pull_and_delete_file(pathname):
     print_info("\nPulling recorded video(s) from the phone, then deleting them there.")
 
     # Pull.
-    adb.adb(f"adb pull {pathname}")
+    adb.adb(f"adb pull {shlex.quote(pathname)}")
 
     # Delete.
     sleep(4)
-    adb.adb(f"adb shell rm {pathname}")
+    adb.adb(f"adb shell rm {adb.quote_remote(pathname)}")
     sleep(1)
-    adb.adb(f"adb -d shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:{pathname}")
+    adb.adb(f"adb -d shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE"
+            f" -d {adb.quote_remote('file:' + pathname)}")
     return os.path.basename(pathname)
 
 PREVIEW_WINDOW_ALWAYS_ON_TOP = False # TODO, possible feature.  But preview blocking messes it up...
@@ -366,10 +367,10 @@ def preview_video(video_path):
     print_info("\nRunning preview...")
     if detect_if_jack_running():
         print_info("\nDetected jack audio running.")
-        preview_cmd = args.preview_video_cmd_jack[0] + f" {video_path}"
+        preview_cmd = args.preview_video_cmd_jack[0] + f" {shlex.quote(video_path)}"
     else:
         print_info("\nDid not detect jack audio running.")
-        preview_cmd = args.preview_video_cmd[0] + f" {video_path}"
+        preview_cmd = args.preview_video_cmd[0] + f" {shlex.quote(video_path)}"
 
     run_local_cmd_blocking(preview_cmd, print_cmd_str=True, capture_output=False,
                        print_cmd_prefix="SYSTEM: ",
@@ -392,7 +393,8 @@ def extract_audio_from_video(video_path):
     output_audio_path = os.path.join(dirname, root_name + EXTRACTED_AUDIO_EXTENSION)
     print_info(f"\nExtracting audio to file: '{output_audio_path}'")
     # https://superuser.com/questions/609740/extracting-wav-from-mp4-while-preserving-the-highest-possible-quality
-    cmd = f"ffmpeg -i {video_path} -map 0:a {output_audio_path} -loglevel quiet"
+    cmd = (f"ffmpeg -i {shlex.quote(video_path)} -map 0:a {shlex.quote(output_audio_path)}"
+           f" -loglevel quiet")
     run_local_cmd_blocking(cmd, print_cmd_str=True, print_cmd_prefix="SYSTEM: ",
                            capture_output=False)
     print_info("\nAudio extracted.")
@@ -411,9 +413,14 @@ def print_info_about_pulled_video(video_path):
     # In Python search for examples or use library: https://docs.python.org/3/library/json.html
     cmd = (f"ffprobe -pretty -show_format -v error -show_entries"
            f" stream=codec_name,width,height,duration,size,bit_rate"
-           f" -of default=noprint_wrappers=1 {video_path} | grep -v 'TAG:'")
+           f" -of default=noprint_wrappers=1 {shlex.quote(video_path)} | grep -v 'TAG:'")
     print_info("\nRunning ffprobe on saved video file:")
-    stdout, stderr = run_local_cmd_blocking(cmd)
+    # The grep returns nonzero if ffprobe prints nothing (such as when ffprobe is
+    # not installed or cannot read the video), so only warn on failure.
+    returncode, stdout, stderr = run_local_cmd_blocking(cmd, fail_on_nonzero_exit=False)
+    if returncode != 0:
+        print_warning("\nWARNING: Could not get the video information with ffprobe.",
+                      file=sys.stderr)
     print(indent_lines(stdout, 4))
     if stderr:
         print(indent_lines(stderr, 4))

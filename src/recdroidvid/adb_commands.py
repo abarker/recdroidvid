@@ -5,10 +5,17 @@ Commands calling the Android Debug Bridge (ADB) to the moblie device.
 """
 
 import sys
+import shlex
 from time import sleep
 from .utility_functions import run_local_cmd_blocking, print_error
 
 args = None # Set globally from main() after command-line args are parsed.
+
+def quote_remote(path):
+    """Quote a path on the device for use in an `adb shell` command string.  The
+    command passes through both the local shell and the device's shell, so the
+    path is quoted twice."""
+    return shlex.quote(shlex.quote(path))
 
 def adb(cmd, *, print_cmd_str=True, exit_on_error=True):
     """Run the ADB command, printing out diagnostics.  Setting `return_output`
@@ -42,9 +49,11 @@ def ls(path, also_hidden=False, extension_whitelist=None, print_cmd_str=True):
     # NOTE NOTE: `adb shell ls` is DIFFERENT FROM `adb ls`, you need also hidden files with
     # `shell adb` to get `.pending....mp4` files, and there are still a few more in `shell ls`.
     if also_hidden:
-        ls_list, ls_stderr = adb(f"adb shell ls -ctra {path}", print_cmd_str=print_cmd_str)
+        ls_list, ls_stderr = adb(f"adb shell ls -ctra {quote_remote(path)}",
+                                 print_cmd_str=print_cmd_str)
     else:
-        ls_list, ls_stderr = adb(f"adb shell ls -ctr {path}", print_cmd_str=print_cmd_str)
+        ls_list, ls_stderr = adb(f"adb shell ls -ctr {quote_remote(path)}",
+                                 print_cmd_str=print_cmd_str)
     ls_list = ls_list.splitlines()
 
     if extension_whitelist:
@@ -57,10 +66,10 @@ def tap_screen(x, y):
     #https://stackoverflow.com/questions/3437686/how-to-use-adb-to-send-touch-events-to-device-using-sendevent-command
     adb(f"adb shell input tap {x} {y}")
 
-def force_stop_opencamera():
-    """Issue a force-stop command to OpenCamera app.  Note this made the Google
-    camera open by default afterward with camera button."""
-    adb("adb shell am force-stop net.sourceforge.opencamera")
+def force_stop_camera_app():
+    """Issue a force-stop command to the camera app.  Note that with OpenCamera this
+    made the Google camera open by default afterward with camera button."""
+    adb(f"adb shell am force-stop {args.camera_package_name[0]}")
 
 def tap_camera_button():
     """Tap the button in the camera to start it or stop it from recording."""
@@ -105,17 +114,18 @@ def open_video_camera():
     #adb("adb shell input keyevent 3") # Simulate Home button to put down anything up.
     adb("adb shell am start -W -c android.intent.category.HOME -a android.intent.action.MAIN") # Do a home event.
     #adb(f"adb shell am start -W -n {args.camera_package_name[0]}/.MainActivity --ei android.intent.extras.CAMERA_FACING 0")
-    adb("adb shell monkey -p net.sourceforge.opencamera 1") # TODO: Above opens menu in opencamera for some reason...
+    adb(f"adb shell monkey -p {args.camera_package_name[0]} 1") # TODO: Above opens menu in opencamera for some reason...
     sleep(1)
 
 def directory_size_increasing(dirname, wait_secs=1):
     """Return true if the save directory is growing in size (i.e., file is being
     recorded there)."""
     DEBUG = False # Print commands to screen when debugging.
-    first_du, stderr = adb(f"adb shell du {dirname}", print_cmd_str=DEBUG)
+    # The -s option gives only the total, even if there are subdirectories.
+    first_du, stderr = adb(f"adb shell du -s {quote_remote(dirname)}", print_cmd_str=DEBUG)
     first_du = first_du.split("\t")[0]
     sleep(wait_secs)
-    second_du, stderr = adb(f"adb shell du {dirname}", print_cmd_str=DEBUG)
+    second_du, stderr = adb(f"adb shell du -s {quote_remote(dirname)}", print_cmd_str=DEBUG)
     second_du = second_du.split("\t")[0]
     return int(second_du) > int(first_du)
 

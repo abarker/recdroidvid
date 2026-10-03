@@ -12,13 +12,16 @@ OpenCamera on Android, controlled from Linux.  (Windows could work in
 principle, but there are various Linux-specific commands which would need to be
 replaced.) No attempt is made to unlock a locked phone.
 
+When the scrcpy monitor window is closed, any new videos are pulled from the
+phone into the current directory, renamed, and then **deleted from the phone**.
+
 Disclaimer:  This is beta-level software that works for what I need it to do.
 It is, however, written fairly generally to be customizable.
 
-Screenshot of the program being used to record music a performance (along with
+Screenshot of the program being used to record a music performance (along with
 the Ardour DAW and Hydrogen drums):
 
-.. image:: https://github.com/abarker/recdroidvid/blob/main/doc/rdv_screenshot_example.png
+.. image:: https://raw.githubusercontent.com/abarker/recdroidvid/main/doc/rdv_screenshot_example.png
     :width: 500px
     :align: center
     :alt: [screenshot of recdroidvid in action]
@@ -26,7 +29,8 @@ the Ardour DAW and Hydrogen drums):
 Installation
 ============
 
-The easiest way to install the basic program is to install from PyPI using pip:
+The easiest way to install the basic program is to install from PyPI using pip
+(Python 3.8 or later is required):
 
 .. code-block:: bash
 
@@ -48,21 +52,43 @@ at https://github.com/Genymobile/scrcpy.
 
 On Ubuntu the repos are out of date as of 2026.  The easiest way to install
 is to get the pre-compiled version from the scrcpy repo at https://github.com/Genymobile/scrcpy/blob/master/doc/linux.md
-Download the tarball, untarzip it, and run the executable in the main dir:
+Download the tarball, extract it, and run the executable in the main dir:
 
 .. code-block:: bash
 
     scrcpy-linux-x86_64-v4.1/scrcpy
 
+Use the ``--scrcpy-cmd`` option (see below) to give the full path to the
+executable if it is not on your ``PATH``.
+
 Installing via snap is also possible but the snap installs can be harder to get
 working and the packaged version of adb may or may not match your device.  This
-worked at one point, but now my need more connect commands to work:
+worked at one point, but now may need more connect commands to work:
 
-   .. code-block:: bash
+.. code-block:: bash
 
     sudo snap install scrcpy
     snap connect scrcpy:camera
     sudo snap connect scrcpy:raw-usb # Required to use OTG mode.
+
+adb
+---
+
+The adb program (Android Debug Bridge) is used to control the phone and to
+pull the videos.  It must be on your ``PATH``.  It is included in the scrcpy
+release tarball, or it can be installed separately:
+
+.. code-block:: bash
+
+    sudo apt install adb
+
+Camera app
+----------
+
+The OpenCamera app needs to be installed on the phone.  It is available from
+F-Droid and the Google Play Store.  Other camera apps might work, using the
+``--camera-package-name`` and ``--camera-save-dir`` options, but they have not
+been tested.
 
 Device setup for scrcpy
 -----------------------
@@ -122,8 +148,8 @@ to Ardour with the ``oscsend`` program, which is in the liblo-tools package:
 
     sudo apt install liblo-tools
 
-The xdotool program is used to check that Ardour is running and to raise its
-windows when the ``--raise-daw-on-*`` options are selected:
+The xdotool program is used to raise the Ardour windows when the
+``--raise-daw-on-*`` options are selected:
 
 .. code-block:: bash
 
@@ -175,10 +201,24 @@ Options and Customization
        :read !recdroidvid -h
 
 To see the command-line options, run ``recdroidvid --help | more``.  The output
-of that command follows.  Note that any options can also be set in the config
-file ``~/.recdroidvid_rc.py``.  The file will be imported and the strings on the
-list ``rdv_options`` will be used as the default command-line options.  See the
-example config file.
+of that command is shown below.
+
+Any options can also be set in the config file ``~/.recdroidvid_rc.py``.  The
+file will be imported and the strings on the list ``rdv_options`` will be used
+as the default command-line options.  Options given on the command line
+override them.  For example:
+
+.. code-block:: python
+
+    rdv_options = [
+       "--date-and-time-in-video-name",
+       "--sync-daw-transport-with-video-recording",
+       "--add-daw-mark-on-transport-start",
+       "--preview-video",
+    ]
+
+A fuller example is in `examples/recdroidvid_rc.py
+<https://github.com/abarker/recdroidvid/blob/main/examples/recdroidvid_rc.py>`_.
 
 This is the help command output::
 
@@ -204,7 +244,7 @@ This is the help command output::
    Record a video on mobile via ADB and pull result. All config options can be
    set in a file `.recdroidvid_rc.py`. The file is evaluated and the list
    `rdv_options` in the file is used as the options list. See the example config
-   file.
+   file `examples/recdroidvid_rc.py` in the project repository.
 
    positional arguments:
      PREFIXSTRING          The basename or prefix of the pulled video file.
@@ -288,24 +328,26 @@ This is the help command output::
                            name the corresponding video will be saved as.
      --raise-daw-on-camera-app-open, -q
                            Raise the DAW to the top of the window stack when the
-                           camara app is opened on the mobile device. Works well
+                           camera app is opened on the mobile device. Works well
                            when scrcpy is also passed the `--always-on-top`
                            option.
      --raise-daw-on-transport-toggle, -r
                            Raise the DAW to the top of the window stack whenever
-                           the DAW transport is toggled by the `--sync-to-daw`
-                           option. Works well when scrcpy is also passed the
-                           `--always-on-top` option.
+                           the DAW transport is started or stopped by the
+                           `--sync-daw-transport-with-video-recording` option.
+                           Works well when scrcpy is also passed the `--always-
+                           on-top` option.
      --raise-daw-to-top-cmd CMD-STRING
                            A system command to raise the DAW windows to the top
-                           of the window stack. Used when either of the
-                           `--raise_daw_on_camera_app_open` or `--raise-daw-on-
-                           transport-toggle` options are selected. The default
-                           uses xdotool to activate any Ardour windows.
+                           of the window stack. Used when either of the `--raise-
+                           daw-on-camera-app-open` or `--raise-daw-on-transport-
+                           toggle` options are selected. The default uses xdotool
+                           to activate any Ardour windows.
      --is-daw-running-cmd CMD-STRING
                            A system command to test if the DAW is actually
                            running. A zero return code means it is, and a nonzero
-                           return code means it isn't.
+                           return code means it isn't. The default uses pgrep to
+                           look for an Ardour process.
      --audio-extract, -e   Extract a separate audio file (currently always a WAV
                            file) from each video.
      --camera-save-dir DIRPATH, -d DIRPATH
