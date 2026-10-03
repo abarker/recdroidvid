@@ -20,6 +20,7 @@ import sys
 import os
 from time import sleep
 import subprocess
+import shlex
 import datetime
 import threading
 
@@ -127,14 +128,18 @@ def stop_daw_transport():
     if args.raise_daw_on_transport_toggle:
         raise_returncode = raise_daw_in_window_stack()
 
-def add_mark_in_daw():
-    """Create a new mark in the DAW when recording is started."""
+def add_mark_in_daw(mark_name):
+    """Create a new mark named `mark_name` in the DAW when recording is started."""
     if not is_daw_running():
         print_warning("WARNING: DAW is not detected as running, not adding a mark.", file=sys.stderr)
         return
-    print_info(f"\nAdding a new mark in the DAW.")
-    run_local_cmd_blocking(args.add_daw_mark_cmd[0], print_cmd_str=True,
-                           print_cmd_prefix="SYSTEM: ")
+    print_info(f"\nAdding a new mark in the DAW named '{mark_name}'.")
+    returncode, stdout, stderr = run_local_cmd_blocking(args.add_daw_mark_cmd[0],
+                                           print_cmd_str=True, print_cmd_prefix="SYSTEM: ",
+                                           macro_dict={"RDV_MARK_NAME": shlex.quote(mark_name)},
+                                                               fail_on_nonzero_exit=False)
+    if returncode != 0:
+        print_warning("WARNING: Nonzero exit status running the add-daw-mark command.", file=sys.stderr)
 
 sync_daw_stop_flag = False # Flag to signal the DAW sync thread to stop.
 
@@ -151,36 +156,40 @@ def video_is_recording_on_device():
           f"\n   '{RECORD_DETECTION_METHOD}'", file=sys.stderr)
     sys.exit(1)
 
-def sync_daw_transport_bg_process(stop_flag_fun):
+def sync_daw_transport_bg_process(stop_flag_fun, video_start_number):
     """Start the DAW transport when video recording is detected on the Android
     device.  Meant to be run as a thread or via multiprocessing to execute at the
-    same time as the scrcpy monitor."""
+    same time as the scrcpy monitor.  The `video_start_number` is the number the
+    first video recorded will have in its saved name, used to name the DAW marks."""
     daw_transport_rolling = False
+    video_number = video_start_number
     while True:
         vid_recording = video_is_recording_on_device()
         if not daw_transport_rolling and vid_recording: # Start DAW recording transport.
             print_debug(f"\n{daw_transport_rolling=}   {vid_recording=}")
-            print_info("\nStarting (toggling) DAW transport.")
+            print_info("\nStarting DAW recording.")
             if args.add_daw_mark_on_transport_start:
-                add_mark_in_daw()
+                add_mark_in_daw(generate_mark_name(args.video_file_prefix, video_number,
+                                                   args.date_and_time_in_video_name))
+            video_number += 1
             start_daw_recording()
             daw_transport_rolling = True
         if daw_transport_rolling and not vid_recording: # Stop DAW recording transport.
             print_debug(f"\n{daw_transport_rolling=}   {vid_recording=}")
-            print_info("\nStopping (toggling) DAW transport.")
+            print_info("\nStopping DAW transport.")
             stop_daw_transport()
             daw_transport_rolling = False
         if stop_flag_fun():
             break
         sleep(SYNC_DAW_SLEEP_TIME)
 
-def sync_daw_transport_with_video_recording():
+def sync_daw_transport_with_video_recording(video_start_number):
     """Start up the background process to sync the DAW transport when recording
     starts or stops are detected on the mobile device."""
     # To use threading instead, set a stop flag as in one of the answers here:
     # https://stackoverflow.com/questions/323972/is-there-any-way-to-kill-a-thread
     proc = threading.Thread(target=sync_daw_transport_bg_process,
-                                   args=(lambda: sync_daw_stop_flag,))
+                                   args=(lambda: sync_daw_stop_flag, video_start_number))
     proc.daemon = True # This is so the thread always dies when the main program exits.
     proc.start()
     return proc
@@ -251,7 +260,7 @@ def start_screen_monitor():
                            macro_dict={"RDV_SCRCPY_TITLE": window_title_str},
                            capture_output=False)
 
-def start_monitoring_and_button_push_recording():
+def start_monitoring_and_button_push_recording(video_start_number):
     """Emulate a button push to start and stop recording."""
     # Get a snapshot of save directory before recording starts.
     before_ls = adb.ls(args.camera_save_dir[0], extension_whitelist=[VIDEO_FILE_EXTENSION])
@@ -260,7 +269,7 @@ def start_monitoring_and_button_push_recording():
         adb.tap_camera_button()
 
     if args.sync_daw_transport_with_video_recording:
-        proc = sync_daw_transport_with_video_recording()
+        proc = sync_daw_transport_with_video_recording(video_start_number)
 
     start_screen_monitor() # This blocks until the screen monitor is closed.
 
@@ -292,6 +301,17 @@ def generate_video_name(video_number, pulled_vid_name):
     new_vid_name = f"{args.video_file_prefix}_{video_number:02d}_{date_time_string}{pulled_vid_name}"
     return new_vid_name
 
+def generate_mark_name(video_file_prefix, video_number, include_date, now=None):
+    """Generate the name for a DAW mark, matching the start of the name that the
+    video will be saved as by `generate_video_name`.  The date is the current
+    date (or the datetime `now`), so it will be off by one day if the video is
+    pulled after midnight."""
+    mark_name = f"{video_file_prefix}_{video_number:02d}"
+    if include_date:
+        now = now if now is not None else datetime.datetime.now()
+        mark_name += now.strftime('_%Y-%m-%d')
+    return mark_name
+
 def monitor_record_and_pull_videos(video_start_number):
     """Record a video on the Android device and pull the resulting file."""
     if USE_SCREENRECORD: # NOTE: This method is no longer tested, may be removed.
@@ -302,7 +322,7 @@ def monitor_record_and_pull_videos(video_start_number):
         return [video_path]
 
     # Use the method requiring a button push on phone, emulated or actual.
-    video_paths = start_monitoring_and_button_push_recording()
+    video_paths = start_monitoring_and_button_push_recording(video_start_number)
     new_video_paths = []
     sleep(5) # Make sure video files have time to finish writing and close.
     for count, vid in enumerate(video_paths):

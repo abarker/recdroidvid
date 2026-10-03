@@ -45,11 +45,23 @@ QUERY_EXTRACT_AUDIO = False # Ask before extracting AUDIO file.
 EXTRACTED_AUDIO_EXTENSION = ".wav"
 
 IS_DAW_RUNNING_CMD = 'xdotool search --onlyvisible --class Ardour'
-START_DAW_RECORDING_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" shift+space'
-STOP_DAW_TRANSPORT_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" space'
-#TOGGLE_DAW_TRANSPORT_CMD = 'xdotool windowactivate "$(xdotool search --onlyvisible --class Ardour | head -1)"'
 
-ADD_DAW_MARK_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" Tab'
+# The DAW transport and marks are controlled via OSC messages sent with the
+# `oscsend` program (from liblo-tools).  OSC must be enabled in Ardour, under
+# Preferences > Control Surfaces.  Ardour listens on UDP port 3819 by default.
+DAW_OSC_HOST = "localhost"
+DAW_OSC_PORT = 3819
+OSCSEND_CMD = f"oscsend {DAW_OSC_HOST} {DAW_OSC_PORT}"
+
+START_DAW_RECORDING_CMD = f"{OSCSEND_CMD} /access_action s Transport/record-roll"
+STOP_DAW_TRANSPORT_CMD = f"{OSCSEND_CMD} /transport_stop"
+ADD_DAW_MARK_CMD = f"{OSCSEND_CMD} /add_marker s RDV_MARK_NAME"
+
+# The older xdotool versions, which send keystrokes to the Ardour window.  These
+# break if a dialog in Ardour grabs the keyboard focus.
+#START_DAW_RECORDING_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" shift+space'
+#STOP_DAW_TRANSPORT_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" space'
+#ADD_DAW_MARK_CMD = 'xdotool key --window "$(xdotool search --onlyvisible --class Ardour | head -1)" Tab'
 
 RAISE_DAW_TO_TOP_CMD = "xdotool search --onlyvisible --class Ardour windowactivate %@"
 
@@ -170,13 +182,15 @@ def parse_command_line():
 
     parser.add_argument("--start-daw-recording-cmd", type=str, nargs=1, metavar="CMD-STRING",
                         default=[START_DAW_RECORDING_CMD], help="""A system command to start
-                        DAW recording.  Used when the `--sync-to-daw` option is chosen.  The
-                        default uses xdotool to send a shift-space character to Ardour.""")
+                        DAW recording.  Used when the `--sync-daw-transport-with-video-recording`
+                        option is chosen.  The default uses oscsend to send an OSC message
+                        to Ardour to run its `Transport/record-roll` action.""")
 
     parser.add_argument("--stop-daw-transport-cmd", type=str, nargs=1, metavar="CMD-STRING",
                         default=[STOP_DAW_TRANSPORT_CMD], help="""A system command to stop the
-                        DAW transport.  Used when the `--sync-to-daw` option is chosen.  The
-                        default uses xdotool to send a space character to Ardour.""")
+                        DAW transport.  Used when the `--sync-daw-transport-with-video-recording`
+                        option is chosen.  The default uses oscsend to send a transport-stop
+                        OSC message to Ardour.""")
 
     parser.add_argument("--add-daw-mark-on-transport-start", "-m", action="store_true",
                         help="""Whether to add a mark in the DAW when the
@@ -184,8 +198,11 @@ def parse_command_line():
 
     parser.add_argument("--add-daw-mark-cmd", type=str, nargs=1, metavar="CMD-STRING",
                         default=[ADD_DAW_MARK_CMD], help="""A system command to add
-                        a mark to the DAW at the playhead.  The default uses xdotool to send
-                        a tab character to Ardour.""")
+                        a mark to the DAW at the playhead.  The default uses oscsend to send
+                        an add-marker OSC message to Ardour.  The string 'RDV_MARK_NAME', if
+                        present in the command, is replaced with a shell-quoted name for the
+                        mark, such as `rdv_03_2026-10-03`, which matches the start of the
+                        name the corresponding video will be saved as.""")
 
     parser.add_argument("--raise-daw-on-camera-app-open", "-q", action="store_true",
                         help="""Raise the DAW to the top

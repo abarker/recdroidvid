@@ -105,12 +105,68 @@ option to set any movie player program from the command line or option file):
 DAW transport synchronization
 -----------------------------
 
-The xdotool program is currently used in order to start the DAW transport when
-that option is selected.
+When the ``--sync-daw-transport-with-video-recording`` option is selected,
+recording in the DAW is started when video recording is detected on the phone,
+and the DAW transport is stopped when the video recording stops.  With the
+``--add-daw-mark-on-transport-start`` option a mark is also added at the start
+of each recording.  The marks are named to match the start of the saved video
+names, such as ``rdv_03`` or, with the ``--date-and-time-in-video-name`` option,
+``rdv_03_2026-10-03``.  (The date in the video name is the date the video is
+pulled from the phone, so the two can differ by a day if a recording runs past
+midnight.)
+
+By default the DAW is controlled by sending Open Sound Control (OSC) messages
+to Ardour with the ``oscsend`` program, which is in the liblo-tools package:
+
+.. code-block:: bash
+
+    sudo apt install liblo-tools
+
+The xdotool program is used to check that Ardour is running and to raise its
+windows when the ``--raise-daw-on-*`` options are selected:
 
 .. code-block:: bash
 
     sudo apt install xdotool
+
+Enabling OSC in Ardour
+~~~~~~~~~~~~~~~~~~~~~~
+
+OSC is not enabled in Ardour by default.  To turn it on:
+
+1. Open ``Edit > Preferences`` and select the ``Control Surfaces`` page.
+
+2. In the lower ``Control Surfaces`` list, check the box next to ``Open Sound
+   Control (OSC)``.  In Ardour 9.7 and later the list is grouped by vendor and
+   sorted alphabetically.  The OSC entry is a top-level row with no vendor, so
+   it appears just after the ``Novation`` group, where it can easily be
+   mistaken for one of the Novation devices.
+
+3. The enabled entry then appears in the ``Active Surfaces`` list.  Its
+   ``Settings`` button shows the OSC settings, including the UDP port Ardour
+   is listening on (3819 by default).
+
+Ardour normally remembers this setting, but if OSC stops working check that it
+is still enabled.
+
+.. tip::
+
+   Testing the connection is usually unnecessary, but if you need to, run
+   these commands with a session open and a track armed for recording:
+
+   .. code-block:: bash
+
+       oscsend localhost 3819 /add_marker s test_mark
+       oscsend localhost 3819 /access_action s Transport/record-roll
+       oscsend localhost 3819 /transport_stop
+
+See the Ardour manual's OSC section for more information:
+https://manual.ardour.org/using-control-surfaces/controlling-ardour-with-osc/
+
+The commands used are set by the ``--start-daw-recording-cmd``,
+``--stop-daw-transport-cmd``, and ``--add-daw-mark-cmd`` options, so they can
+be changed (for example to use a different OSC port, or a different DAW).  In
+the mark command the string ``RDV_MARK_NAME`` is replaced by the mark name.
 
 Options and Customization
 =========================
@@ -127,12 +183,13 @@ example config file.
 This is the help command output::
 
    usage: recdroidvid [-h] [--scrcpy-cmd CMD-STRING] [--numbering-start INTEGER]
-                      [--loop] [--autorecord] [--preview-video]
+                      [--loop] [--wait-loop] [--autorecord] [--preview-video]
                       [--preview-video-cmd CMD-STRING]
                       [--preview-video-cmd-jack CMD-STRING]
                       [--date-and-time-in-video-name]
                       [--sync-daw-transport-with-video-recording]
-                      [--toggle-daw-transport-cmd CMD-STRING]
+                      [--start-daw-recording-cmd CMD-STRING]
+                      [--stop-daw-transport-cmd CMD-STRING]
                       [--add-daw-mark-on-transport-start]
                       [--add-daw-mark-cmd CMD-STRING]
                       [--raise-daw-on-camera-app-open]
@@ -141,7 +198,7 @@ This is the help command output::
                       [--is-daw-running-cmd CMD-STRING] [--audio-extract]
                       [--camera-save-dir DIRPATH]
                       [--camera-package-name PACKAGENAME]
-                      [--config-conditional STRING]
+                      [--config-conditional STRING] [--no-color]
                       [PREFIXSTRING]
 
    Record a video on mobile via ADB and pull result. All config options can be
@@ -154,7 +211,7 @@ This is the help command output::
                            Whether name or prefix depends on the method used to
                            record.
 
-   optional arguments:
+   options:
      -h, --help            show this help message and exit
      --scrcpy-cmd CMD-STRING, -y CMD-STRING
                            The command, including arguments, to be used to launch
@@ -177,6 +234,12 @@ This is the help command output::
                            Video numbering (as included in the filename) is
                            automatically incremented over all the videos, across
                            loops.
+     --wait-loop, -w       The '--loop' option always starts the scrcpy video
+                           monitor immediately on the first loop. This option
+                           delays the action until the user responds to a query.
+                           This avoids the CPU cost of scrcpy if you are not
+                           planning to start video recording right away. This
+                           option implies the '--loop' option.
      --autorecord, -a      Automatically start recording when the scrcpy monitor
                            starts up.
      --preview-video, -p   Preview each video that is downloaded. Currently uses
@@ -201,17 +264,28 @@ This is the help command output::
                            Start the DAW transport when video recording is
                            detected on the mobile device. May increase CPU loads
                            on the computer and the mobile device.
-     --toggle-daw-transport-cmd CMD-STRING
-                           A system command to toggle the DAW transport. Used
-                           when the `--sync-to-daw` option is chosen. The default
-                           uses xdotool to send a space-bar character to Ardour.
+     --start-daw-recording-cmd CMD-STRING
+                           A system command to start DAW recording. Used when the
+                           `--sync-daw-transport-with-video-recording` option is
+                           chosen. The default uses oscsend to send an OSC
+                           message to Ardour to run its `Transport/record-roll`
+                           action.
+     --stop-daw-transport-cmd CMD-STRING
+                           A system command to stop the DAW transport. Used when
+                           the `--sync-daw-transport-with-video-recording` option
+                           is chosen. The default uses oscsend to send a
+                           transport-stop OSC message to Ardour.
      --add-daw-mark-on-transport-start, -m
                            Whether to add a mark in the DAW when the transport
                            starts, to help in syncing with the video.
      --add-daw-mark-cmd CMD-STRING
                            A system command to add a mark to the DAW at the
-                           playhead. The default uses xdotool to send a tab
-                           character to Ardour.
+                           playhead. The default uses oscsend to send an add-
+                           marker OSC message to Ardour. The string
+                           'RDV_MARK_NAME', if present in the command, is
+                           replaced with a shell-quoted name for the mark, such
+                           as `rdv_03_2026-10-03`, which matches the start of the
+                           name the corresponding video will be saved as.
      --raise-daw-on-camera-app-open, -q
                            Raise the DAW to the top of the window stack when the
                            camara app is opened on the mobile device. Works well
@@ -232,7 +306,7 @@ This is the help command output::
                            A system command to test if the DAW is actually
                            running. A zero return code means it is, and a nonzero
                            return code means it isn't.
-     --audio-extract, -w   Extract a separate audio file (currently always a WAV
+     --audio-extract, -e   Extract a separate audio file (currently always a WAV
                            file) from each video.
      --camera-save-dir DIRPATH, -d DIRPATH
                            The directory on the remote device where the camera
@@ -254,4 +328,5 @@ This is the help command output::
                            value is the string "default". To access this
                            variable, use `from recdroidvid import
                            config_conditional` at the top of the config file.
+     --no-color            Do not use color highlighting on the terminal output.
 
