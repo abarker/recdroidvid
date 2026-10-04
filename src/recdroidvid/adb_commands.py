@@ -68,7 +68,8 @@ def tap_screen(x, y):
 
 def force_stop_camera_app():
     """Issue a force-stop command to the camera app.  Note that with OpenCamera this
-    made the Google camera open by default afterward with camera button."""
+    made the Google camera open by default afterward with camera button, so the
+    app should be opened again before the camera button is used."""
     adb(f"adb shell am force-stop {args.camera_package_name[0]}")
 
 def tap_camera_button():
@@ -90,12 +91,15 @@ def device_sleep(exit_on_error=True):
     sleep(2)
 
 def unlock_screen():
-    """Swipes screen up, assuming no passcode."""
-    # Note 82 is the menu key.
-    #adb(f"adb shell input keyevent 82 && adb shell input keyevent 66")
+    """Dismiss the lock screen if there is no passcode.  With a passcode the
+    unlock prompt is shown instead, and the phone must be unlocked by hand."""
     adb("adb shell input keyevent 3") # Simulate Home button to put down anything up.
     #adb("adb shell am start -W -c android.intent.category.HOME -a android.intent.action.MAIN") # Do home event.
-    adb(f"adb shell input keyevent 82")
+    # Note that the menu key (keyevent 82) was previously used to dismiss the lock
+    # screen.  But with no lock screen the menu key can go to the camera app if it
+    # was left open, and OpenCamera then opens its settings.
+    #adb(f"adb shell input keyevent 82")
+    adb("adb shell wm dismiss-keyguard")
     sleep(1)
 
 def open_video_camera():
@@ -113,9 +117,12 @@ def open_video_camera():
     # https://stackoverflow.com/questions/4567904/how-to-start-an-application-using-android-adb-tools
     #adb("adb shell input keyevent 3") # Simulate Home button to put down anything up.
     adb("adb shell am start -W -c android.intent.category.HOME -a android.intent.action.MAIN") # Do a home event.
+    # Stop the app first so it always starts fresh.  Otherwise it resumes whatever
+    # screen was last shown, such as OpenCamera's settings if they were left open.
+    force_stop_camera_app()
     #adb(f"adb shell am start -W -n {args.camera_package_name[0]}/.MainActivity --ei android.intent.extras.CAMERA_FACING 0")
-    adb(f"adb shell monkey -p {args.camera_package_name[0]} 1") # TODO: Above opens menu in opencamera for some reason...
-    sleep(1)
+    adb(f"adb shell monkey -p {args.camera_package_name[0]} 1")
+    sleep(3) # A fresh start takes longer, and `--autorecord` needs the camera to be ready.
 
 def directory_size_increasing(dirname, wait_secs=1):
     """Return true if the save directory is growing in size (i.e., file is being

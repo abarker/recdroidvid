@@ -19,6 +19,11 @@ History
 
 * The ``--camera-package-name`` option is now used (it was ignored).
 
+* The camera app no longer sometimes opens in its settings screen.  The menu
+  key is no longer sent to dismiss the lock screen (it could reach OpenCamera,
+  which opens its settings), and the camera app is now force-stopped before it
+  is opened, so it always starts on its main screen.
+
 * Filenames and the video prefix are now quoted in system and ADB commands,
   so a prefix with spaces works.
 
