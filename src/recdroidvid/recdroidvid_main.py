@@ -39,7 +39,7 @@ from .adb_commands import ADBException
 
 args = None # Set globally from main() after command-line args are parsed.
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 
 DEBUG = False
 

@@ -1,17 +1,8 @@
 History
 =======
 
-0.2.0 (2026-10-03)
+0.2.1 (2026-10-04)
 ------------------
-
-* The DAW (Ardour) is now controlled by sending OSC messages with the
-  ``oscsend`` program instead of sending keystrokes with xdotool.  This works
-  with Ardour 9, where the keystrokes could be captured by a dialog.  OSC must
-  be enabled in Ardour, and the liblo-tools package must be installed.  See the
-  README.
-
-* DAW marks are now named to match the start of the saved video names, such as
-  ``rdv_03_2026-10-03``.
 
 * The DAW-running check now looks for an Ardour process instead of a visible
   Ardour window, so DAW syncing also works when Ardour is minimized or on
@@ -36,6 +27,18 @@ History
 
 * Added an example config file, ``examples/recdroidvid_rc.py``, fixed the
   README screenshot link, and updated the docs.
+
+0.2.0 (2026-10-03)
+------------------
+
+* The DAW (Ardour) is now controlled by sending OSC messages with the
+  ``oscsend`` program instead of sending keystrokes with xdotool.  This works
+  with Ardour 9, where the keystrokes could be captured by a dialog.  OSC must
+  be enabled in Ardour, and the liblo-tools package must be installed.  See the
+  README.
+
+* DAW marks are now named to match the start of the saved video names, such as
+  ``rdv_03_2026-10-03``.
 
 * Version numbers made consistent.  The 0.1.0 release on PyPI was an older
   (2022) release, uploaded before 0.0.3.
